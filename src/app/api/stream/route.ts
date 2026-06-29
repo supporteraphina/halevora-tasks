@@ -19,7 +19,7 @@
  * on abort we unsubscribe every channel (ref-counted UNLISTEN) and announce presence leave.
  */
 import { currentActor } from "@/lib/scope";
-import { subscribeBoard } from "@/lib/realtimeListener";
+import { subscribeBoard, subscribeUser } from "@/lib/realtimeListener";
 import { actorMayReceive, isBoardVisible } from "@/lib/realtimeScope";
 import { publishEvent } from "@/lib/realtime";
 import { encodeEvent, type RealtimeEvent } from "@/domain/realtime";
@@ -71,18 +71,27 @@ export async function GET(req: Request) {
       send(`retry: 3000\n\n`);
       sendEvent({ type: "presence", boardId: "", userId: actor.userId, presence: "join" });
 
+      // Per-subscriber authorization — re-query under THIS actor's scope (or recipient check
+      // for a notification) before forwarding any event. Fail closed on a resolution error.
+      function forwardIfAllowed(event: RealtimeEvent) {
+        actorMayReceive(actor, event)
+          .then((ok) => {
+            if (ok) sendEvent(event);
+          })
+          .catch(() => {
+            // Fail closed: a resolution error never forwards the event.
+          });
+      }
+
+      // Subscribe to the actor's OWN notification channel (user-targeted inbox pings). Always
+      // on — independent of which boards are being viewed. `actorMayReceive` asserts the
+      // notification's recipientId equals this actor, so only their own pings get through.
+      const unsubUser = await subscribeUser(actor.userId, forwardIfAllowed);
+      unsubscribers.push(unsubUser);
+
       // Subscribe to each allowed board. The hub routes by channel; we authorize per event.
       for (const boardId of allowed) {
-        const unsub = await subscribeBoard(boardId, (event) => {
-          // PER-SUBSCRIBER authorization — re-query under THIS actor's scope before forwarding.
-          actorMayReceive(actor, event)
-            .then((ok) => {
-              if (ok) sendEvent(event);
-            })
-            .catch(() => {
-              // Fail closed: a resolution error never forwards the event.
-            });
-        });
+        const unsub = await subscribeBoard(boardId, forwardIfAllowed);
         unsubscribers.push(unsub);
 
         // Announce our presence to other viewers of this board (best-effort broadcast).

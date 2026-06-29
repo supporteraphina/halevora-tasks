@@ -23,11 +23,15 @@ export interface UseRealtimeResult {
 /**
  * @param boardIds  boards to subscribe to (stable identity matters — pass a memoized array or
  *                  a primitive-joined key changes will reconnect).
- * @param onEvent   called for every authorized event (task/chat/presence). Keep it stable.
+ * @param onEvent   called for every authorized event (task/chat/presence/notification). Stable.
+ * @param alwaysConnect  open the stream even with NO boards. The server always wires the actor's
+ *                  own `user_<id>` notification channel, so the inbox bell needs the connection
+ *                  regardless of which boards (if any) are being viewed.
  */
 export function useRealtime(
   boardIds: string[],
   onEvent?: (event: RealtimeEvent) => void,
+  alwaysConnect = false,
 ): UseRealtimeResult {
   const [connected, setConnected] = useState(false);
   const [present, setPresent] = useState<Set<string>>(new Set());
@@ -35,7 +39,9 @@ export function useRealtime(
   onEventRef.current = onEvent;
 
   // Stable subscription key so we only reconnect when the board set actually changes.
-  const key = [...boardIds].sort().join(",");
+  const boardKey = [...boardIds].sort().join(",");
+  // The effect key folds in alwaysConnect so an empty-board always-on subscription still opens.
+  const key = boardKey || (alwaysConnect ? "_self" : "");
 
   useEffect(() => {
     if (!key) {
@@ -43,8 +49,9 @@ export function useRealtime(
       return;
     }
     const params = new URLSearchParams();
-    for (const id of key.split(",")) params.append("board", id);
-    const es = new EventSource(`/api/stream?${params.toString()}`);
+    if (boardKey) for (const id of boardKey.split(",")) params.append("board", id);
+    const qs = params.toString();
+    const es = new EventSource(qs ? `/api/stream?${qs}` : `/api/stream`);
 
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false); // EventSource retries automatically
@@ -72,6 +79,8 @@ export function useRealtime(
       setConnected(false);
       setPresent(new Set());
     };
+    // `key` already folds in boardKey + alwaysConnect; it is the sole reconnect trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   return { presentUserIds: [...present], connected };

@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { requireActor } from "@/lib/scope";
 import { visibleBoardIds } from "@/lib/realtimeScope";
 import { publishChatEvent } from "@/lib/realtime";
+import { notifyOnChatMessage } from "@/lib/notifications";
 import { loadBoardMessages, loadMessage, type ChatMessageView } from "./data";
 
 export interface ChatActionState {
@@ -36,11 +37,19 @@ export async function sendChatMessageAction(
 
   const msg = await prisma.chatMessage.create({
     data: { boardId, authorId: actor.userId, body },
-    select: { id: true },
+    select: { id: true, board: { select: { name: true } } },
   });
 
   // Live-deliver: announce the new message id on the board channel (body stays off the wire).
   await publishChatEvent(boardId, msg.id);
+  // Notify @mentioned users (best-effort; never blocks). A mention notifies but grants no
+  // board access — opening the inbox link respects the same board-visibility scope as chat.
+  await notifyOnChatMessage({
+    actorId: actor.userId,
+    boardId,
+    body,
+    boardName: msg.board.name,
+  });
   return { ok: true };
 }
 

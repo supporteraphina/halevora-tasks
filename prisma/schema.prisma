@@ -73,6 +73,13 @@ enum RecurrenceTrigger {
   ON_SCHEDULE // recur on the calendar date regardless of status
 }
 
+/// Kind of inbox notification (Section 12). Mirror of src/domain/notifications.ts.
+enum NotificationType {
+  assigned // you were added as an assignee on a task
+  mentioned // you were @mentioned in a comment or chat message
+  commented // someone commented on a task you're assigned to / created
+}
+
 // ---------------------------------------------------------------------------
 // Identity & workspace hierarchy
 // ---------------------------------------------------------------------------
@@ -100,6 +107,8 @@ model User {
   automationRules    AutomationRule[]
   customFieldPeople  CustomFieldValue[] @relation("CustomFieldPeople")
   savedViews         SavedView[]
+  notifications      Notification[]   @relation("NotificationRecipient")
+  actedNotifications Notification[]   @relation("NotificationActor")
 
   @@index([role])
 }
@@ -186,6 +195,8 @@ model Task {
   // Dependency edges this task participates in.
   blocking     TaskDependency[] @relation("DependencyBlocker") // edges where this task is the blocker
   blockedBy    TaskDependency[] @relation("DependencyBlocked") // edges where this task is blocked
+
+  notifications Notification[]
 
   @@index([boardId, status])
   @@index([parentId])
@@ -464,4 +475,35 @@ model ChatMessage {
   author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([boardId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (Section 12 — inbox + @mentions)
+// ---------------------------------------------------------------------------
+
+/// A single inbox notification for ONE recipient. Generated on assign-to-you, @mention, and
+/// comment-on-your-task. Read queries are ALWAYS filtered to `recipientId = actor` (the
+/// security boundary — a notification is private to its recipient). `taskId`/`boardId` link
+/// the notification to its source surface, but linking does NOT widen visibility: the linked
+/// task still 404s under row-level scope if the recipient can't otherwise see it (the documented
+/// @mention-no-leak rule). `actorId` is who triggered it; `data` carries a tiny display snippet
+/// (e.g. the task title) captured at emit time so the inbox renders without re-reading the task.
+model Notification {
+  id          String           @id @default(cuid())
+  recipientId String
+  type        NotificationType
+  taskId      String?
+  boardId     String?
+  commentId   String?
+  actorId     String?
+  data        Json? // small display context, e.g. { taskTitle, snippet }
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  recipient User  @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  task      Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // The inbox query is (recipient, unread-first, newest-first): this composite index serves it.
+  @@index([recipientId, readAt, createdAt])
 }

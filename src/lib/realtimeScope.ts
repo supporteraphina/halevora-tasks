@@ -77,6 +77,11 @@ export async function actorMayReceive(
 ): Promise<boolean> {
   try {
     const visibility: EventVisibility = {};
+    if (event.type === "notification") {
+      // User-targeted: no DB fact needed — recipient equality is the whole rule (pure predicate).
+      // A notification ping carries no task/board secret; the inbox re-fetches under scope.
+      return canReceiveEvent(actor, event, visibility);
+    }
     if (event.type === "task") {
       visibility.taskVisible = event.taskId
         ? await isTaskVisible(actor, event.taskId)

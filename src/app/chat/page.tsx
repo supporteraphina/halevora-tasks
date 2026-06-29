@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import prisma from "@/lib/prisma";
 import { currentActor } from "@/lib/scope";
+import { candidateHandles } from "@/domain/mentions";
 import { loadChatBoards, loadBoardMessages } from "./data";
 import ChatClient from "./ChatClient";
 
@@ -22,6 +24,19 @@ export default async function ChatPage() {
     ? await loadBoardMessages(actor, firstBoardId)
     : [];
 
+  // Mention candidates: name + email handles, for the @mention picker + chip highlight. Names
+  // are not row-scoped task content (any member may mention anyone; visibility is unchanged).
+  const users = await prisma.user.findMany({
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" },
+  });
+  const mentionUsers = users.map((u) => ({
+    id: u.id,
+    name: u.name,
+    handle: candidateHandles(u)[0] ?? u.id,
+  }));
+  const handles = users.flatMap((u) => candidateHandles(u));
+
   return (
     <ChatClient
       boards={boards}
@@ -29,6 +44,8 @@ export default async function ChatPage() {
       initialMessages={initialMessages}
       currentUserId={actor.userId}
       timezone={actor.timezone}
+      mentionUsers={mentionUsers}
+      handles={handles}
     />
   );
 }

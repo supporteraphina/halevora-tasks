@@ -1,0 +1,9 @@
+.chip {
+  display: inline;
+  color: var(--primary-strong);
+  background: var(--primary-weak);
+  border-radius: var(--radius-sm);
+  padding: 0 3px;
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}

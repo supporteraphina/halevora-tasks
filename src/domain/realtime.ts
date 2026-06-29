@@ -26,7 +26,8 @@ import type { ScopeActor } from "./scope";
 export type RealtimeEventType =
   | "task" // a task was created/moved/status/edited/archived (board liveness)
   | "chat" // a new chat message on a board
-  | "presence"; // a viewer joined/left a board (heartbeat)
+  | "presence" // a viewer joined/left a board (heartbeat)
+  | "notification"; // a NEW notification for ONE recipient (Section 12, user-targeted)
 
 /** The minimal, content-free wire payload. */
 export interface RealtimeEvent {
@@ -40,6 +41,12 @@ export interface RealtimeEvent {
   /** Present for `presence` — who is viewing and whether joining/leaving. Names resolved client-side. */
   userId?: string;
   presence?: "join" | "leave";
+  /**
+   * Present for `notification` — the user this notification is FOR. Unlike board events, a
+   * notification is user-targeted: the relay delivers it ONLY to the subscriber whose own id
+   * equals this. The client re-fetches the unread list under scope on arrival (ids-only here).
+   */
+  recipientId?: string;
 }
 
 /** Channel a board's chat + presence + task-liveness events publish on. ONE channel per board. */
@@ -48,13 +55,24 @@ export function boardChannel(boardId: string): string {
 }
 
 /**
+ * Channel a user's own notifications publish on. ONE channel per recipient. The SSE route
+ * subscribes a connected user to THEIR own channel; the per-subscriber filter additionally
+ * asserts `event.recipientId === actor.userId` so even if two users shared a channel name by
+ * accident, a notification could never be delivered to the wrong person.
+ */
+export function userChannel(userId: string): string {
+  return `user_${userId}`;
+}
+
+/**
  * Postgres channel identifiers are limited (63 bytes) and `pg_notify`'s first arg is an
- * identifier-like string. Board ids are cuids (lowercase alnum) so `board_<cuid>` is always
- * safe; we still defensively assert the shape so a malformed id can never inject SQL via the
- * channel name (the publish helper uses a parameterized `pg_notify`, but this is belt-and-braces).
+ * identifier-like string. Board/user ids are cuids (lowercase alnum) so `board_<cuid>` /
+ * `user_<cuid>` are always safe; we still defensively assert the shape so a malformed id can
+ * never inject SQL via the channel name (the publish helper uses a parameterized `pg_notify`,
+ * but this is belt-and-braces).
  */
 export function isValidChannel(channel: string): boolean {
-  return /^board_[a-z0-9]+$/.test(channel) && channel.length <= 63;
+  return /^(board|user)_[a-z0-9]+$/.test(channel) && channel.length <= 63;
 }
 
 /** Encode an event to the compact JSON string carried in the NOTIFY payload. */
@@ -77,7 +95,14 @@ export function decodeEvent(payload: string): RealtimeEvent | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   const type = o.type;
-  if (type !== "task" && type !== "chat" && type !== "presence") return null;
+  if (
+    type !== "task" &&
+    type !== "chat" &&
+    type !== "presence" &&
+    type !== "notification"
+  ) {
+    return null;
+  }
 
   const event: RealtimeEvent = { type };
   if (typeof o.taskId === "string") event.taskId = o.taskId;
@@ -85,9 +110,15 @@ export function decodeEvent(payload: string): RealtimeEvent | null {
   if (typeof o.messageId === "string") event.messageId = o.messageId;
   if (typeof o.userId === "string") event.userId = o.userId;
   if (o.presence === "join" || o.presence === "leave") event.presence = o.presence;
+  if (typeof o.recipientId === "string") event.recipientId = o.recipientId;
 
-  // Per-type minimum: every event must carry a boardId (the routing key). A `task` event must
-  // additionally name the task it concerns; a `chat` event its message id.
+  // Per-type minimum. Board events carry a boardId (the routing key); a notification carries a
+  // recipientId (its routing key) and may omit boardId entirely (e.g. a chat mention names no
+  // board to the recipient — the inbox re-fetches under scope).
+  if (type === "notification") {
+    if (!event.recipientId) return null;
+    return event;
+  }
   if (!event.boardId) return null;
   if (type === "task" && !event.taskId) return null;
   if (type === "chat" && !event.messageId) return null;
@@ -111,8 +142,12 @@ export interface EventVisibility {
  * THE per-subscriber realtime authorization predicate. Pure: given the subscriber's role and
  * the freshly-resolved visibility facts, decide whether this event may be delivered.
  *
- *   - CEO sees everything → always true (still requires the relay to have resolved the board/task,
- *     but a CEO's re-query always succeeds, so the facts come back true).
+ *   - `notification` event → user-targeted, NOT board-scoped. Delivered ONLY when the event's
+ *     `recipientId` equals the subscriber's own id. This rule applies to EVERYONE, CEO included:
+ *     a CEO must not receive another user's notifications, so notification is checked BEFORE the
+ *     CEO-sees-everything shortcut.
+ *   - CEO sees everything → always true for board events (still requires the relay to have
+ *     resolved the board/task, but a CEO's re-query always succeeds, so the facts come back true).
  *   - `task` event → deliver only when the task is visible to this subscriber RIGHT NOW.
  *   - `chat` / `presence` event → deliver only when the board is visible to this subscriber.
  *
@@ -125,6 +160,10 @@ export function canReceiveEvent(
   event: RealtimeEvent,
   visibility: EventVisibility,
 ): boolean {
+  // Notifications are strictly user-targeted — recipient equality gates EVERYONE (CEO too).
+  if (event.type === "notification") {
+    return !!event.recipientId && event.recipientId === actor.userId;
+  }
   if (actor.role === "CEO") return true;
   switch (event.type) {
     case "task":

@@ -26,6 +26,7 @@ import { isClosed } from "@/domain/status";
 import { nextOccurrence } from "@/domain/recurrence";
 import { recordActivity } from "@/lib/activity";
 import { publishTaskEvent } from "@/lib/realtime";
+import { notifyOnComment, notifyOnAssigned } from "@/lib/notifications";
 import { maybeRecurOnStatusChange } from "@/lib/recurrenceTrigger";
 import {
   onStatusChanged,
@@ -256,6 +257,21 @@ export async function toggleAssigneeAction(
     actorId: actor.userId,
     userId,
   });
+  // Notify the newly-added assignee (not on self-assign). They can see the task now, so the
+  // notification link resolves for them under scope. Best-effort — never blocks the mutation.
+  if (op === "add") {
+    const titled = await prisma.task.findUnique({
+      where: { id: task.id },
+      select: { title: true },
+    });
+    await notifyOnAssigned({
+      actorId: actor.userId,
+      taskId: task.id,
+      boardId: task.boardId,
+      addedAssigneeId: userId,
+      taskTitle: titled?.title ?? "a task",
+    });
+  }
   // Live board: assignee changes alter who can SEE the card — push so viewers re-fetch
   // (each subscriber is re-authorized, so a member who just lost access stops getting it).
   await revalidateAndPublishTask(task.id, task.boardId);
@@ -836,18 +852,33 @@ export async function createCommentAction(
   const { actor, task } = await findVisibleTask(taskId);
   if (!task) return { error: "Task not found." };
 
-  await prisma.comment.create({
+  const comment = await prisma.comment.create({
     data: {
       taskId: task.id,
       authorId: actor.userId,
       body: doc as Prisma.InputJsonValue,
     },
+    select: { id: true },
   });
   await recordActivity({
     taskId: task.id,
     boardId: task.boardId,
     actorId: actor.userId,
     type: "comment_created",
+  });
+  // Notify @mentions in the comment + the task's stakeholders (best-effort; never blocks).
+  // The task's title is loaded once for the inbox display snippet.
+  const titled = await prisma.task.findUnique({
+    where: { id: task.id },
+    select: { title: true },
+  });
+  await notifyOnComment({
+    actorId: actor.userId,
+    taskId: task.id,
+    boardId: task.boardId,
+    commentId: comment.id,
+    commentBody: doc,
+    taskTitle: titled?.title ?? "a task",
   });
   revalidateTask(task.id);
   return { ok: true };

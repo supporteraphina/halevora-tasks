@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRealtime } from "@/components/useRealtime";
+import MentionText from "@/components/MentionText";
 import {
   sendChatMessageAction,
   fetchBoardMessagesAction,
@@ -10,6 +11,12 @@ import {
 import type { ChatBoard, ChatMessageView } from "./data";
 import type { RealtimeEvent } from "@/domain/realtime";
 import styles from "./chat.module.css";
+
+export interface MentionUser {
+  id: string;
+  name: string;
+  handle: string;
+}
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -34,12 +41,16 @@ export default function ChatClient({
   initialMessages,
   currentUserId,
   timezone,
+  mentionUsers,
+  handles,
 }: {
   boards: ChatBoard[];
   initialBoardId: string | null;
   initialMessages: ChatMessageView[];
   currentUserId: string;
   timezone: string;
+  mentionUsers: MentionUser[];
+  handles: string[];
 }) {
   const [activeBoardId, setActiveBoardId] = useState<string | null>(initialBoardId);
   const [messages, setMessages] = useState<ChatMessageView[]>(initialMessages);
@@ -47,6 +58,34 @@ export default function ChatClient({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const listRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Lowercased resolvable handle set for chip highlighting (stable for the session).
+  const handleSet = useMemo(() => new Set(handles.map((h) => h.toLowerCase())), [handles]);
+
+  // @mention autocomplete: when the caret is typing a `@token`, suggest matching users.
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const suggestions = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return mentionUsers
+      .filter((u) => u.handle.toLowerCase().startsWith(q) || u.name.toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [mentionQuery, mentionUsers]);
+
+  function onDraftChange(value: string) {
+    setDraft(value);
+    // Detect a trailing `@token` the caret is inside (token = word chars after the last @).
+    const m = /(^|\s)@([a-z0-9._-]*)$/i.exec(value);
+    setMentionQuery(m ? m[2] : null);
+  }
+
+  function pickMention(u: MentionUser) {
+    const next = draft.replace(/(^|\s)@([a-z0-9._-]*)$/i, (_full, lead) => `${lead}@${u.handle} `);
+    setDraft(next);
+    setMentionQuery(null);
+    textareaRef.current?.focus();
+  }
 
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? null;
 
@@ -107,6 +146,7 @@ export default function ChatClient({
         return;
       }
       setDraft("");
+      setMentionQuery(null);
       // Optimistic refresh: the SSE event will append, but re-fetch ensures our own message
       // appears even if the local stream missed its own broadcast.
       const refreshed = await fetchBoardMessagesAction(activeBoardId);
@@ -201,7 +241,9 @@ export default function ChatClient({
                         {formatTime(new Date(m.createdAt), timezone)}
                       </time>
                     </div>
-                    <p className={styles.body}>{m.body}</p>
+                    <p className={styles.body}>
+                      <MentionText text={m.body} handles={handleSet} />
+                    </p>
                   </div>
                 </div>
               );
@@ -216,15 +258,41 @@ export default function ChatClient({
             </p>
           ) : null}
           <div className={styles.composerRow}>
+            {suggestions.length > 0 ? (
+              <ul className={styles.mentionMenu} role="listbox" aria-label="Mention a teammate">
+                {suggestions.map((u) => (
+                  <li key={u.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      className={styles.mentionOption}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        pickMention(u);
+                      }}
+                    >
+                      <span className={styles.mentionName}>{u.name}</span>
+                      <span className={styles.mentionHandle}>@{u.handle}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <textarea
+              ref={textareaRef}
               className={styles.input}
               value={draft}
-              placeholder={`Message ${activeBoard?.name ?? ""}`}
+              placeholder={`Message ${activeBoard?.name ?? ""} — @ to mention`}
               rows={1}
               disabled={pending || !activeBoardId}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => onDraftChange(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (e.key === "Escape" && mentionQuery !== null) {
+                  setMentionQuery(null);
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey && suggestions.length === 0) {
                   e.preventDefault();
                   send();
                 }

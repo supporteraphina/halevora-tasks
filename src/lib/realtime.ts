@@ -17,28 +17,37 @@
 import prisma from "@/lib/prisma";
 import {
   boardChannel,
+  userChannel,
   encodeEvent,
   type RealtimeEvent,
 } from "@/domain/realtime";
 
 /**
- * Publish one event on a board's channel. `pg_notify(channel, payload)` is called via a
- * parameterized `$executeRaw` so neither the channel nor the payload can be injected. The
- * channel is always `board_<id>` for a known board id (cuid), and the payload is compact JSON.
+ * Low-level publish: NOTIFY one already-built event on an explicit channel. `pg_notify(channel,
+ * payload)` is called via a parameterized `$executeRaw` so neither the channel nor the payload
+ * can be injected. The channel is always `board_<id>` or `user_<id>` for a known cuid; the
+ * payload is compact, ids-only JSON. Best-effort — a publish failure never fails the mutation.
  */
-export async function publishEvent(
-  boardId: string,
-  event: Omit<RealtimeEvent, "boardId"> & { boardId?: string },
-): Promise<void> {
+async function notifyChannel(channel: string, event: RealtimeEvent): Promise<void> {
   try {
-    const full: RealtimeEvent = { ...event, boardId } as RealtimeEvent;
-    const channel = boardChannel(boardId);
-    const payload = encodeEvent(full);
+    const payload = encodeEvent(event);
     // pg_notify takes (text, text); both are bound parameters — no string interpolation.
     await prisma.$executeRaw`SELECT pg_notify(${channel}, ${payload})`;
   } catch {
     // Best-effort: realtime is additive. Never surface a publish error to the mutation.
   }
+}
+
+/**
+ * Publish one event on a BOARD's channel (board-broadcast: task liveness, chat, presence).
+ * Each subscriber is re-authorized per event by the SSE relay, so a board-wide NOTIFY is safe.
+ */
+export async function publishEvent(
+  boardId: string,
+  event: Omit<RealtimeEvent, "boardId"> & { boardId?: string },
+): Promise<void> {
+  const full: RealtimeEvent = { ...event, boardId } as RealtimeEvent;
+  await notifyChannel(boardChannel(boardId), full);
 }
 
 /** Convenience: announce that a task changed (created/moved/status/edited/archived). */
@@ -52,4 +61,21 @@ export async function publishChatEvent(
   messageId: string,
 ): Promise<void> {
   await publishEvent(boardId, { type: "chat", messageId });
+}
+
+/**
+ * Publish a NOTIFICATION ping on ONE recipient's `user_<id>` channel (user-targeted, NOT
+ * board-broadcast). The SSE relay additionally asserts the subscriber's id equals
+ * `recipientId`, so even a wrong channel could never deliver to the wrong person. Ids only —
+ * no notification content rides the wire; the inbox re-fetches the unread list under scope.
+ */
+export async function publishNotification(
+  recipientId: string,
+  boardId?: string,
+): Promise<void> {
+  await notifyChannel(userChannel(recipientId), {
+    type: "notification",
+    recipientId,
+    ...(boardId ? { boardId } : {}),
+  });
 }

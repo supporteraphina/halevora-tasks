@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   boardChannel,
+  userChannel,
   isValidChannel,
   encodeEvent,
   decodeEvent,
@@ -27,6 +28,13 @@ describe("boardChannel / isValidChannel", () => {
     expect(isValidChannel("board_abc; DROP TABLE")).toBe(false); // injection attempt
     expect(isValidChannel("board_" + "x".repeat(70))).toBe(false); // > 63 bytes
   });
+
+  it("builds + validates a user_<id> notification channel", () => {
+    expect(userChannel("abc123")).toBe("user_abc123");
+    expect(isValidChannel("user_ckabc123def456")).toBe(true);
+    expect(isValidChannel("user_")).toBe(false);
+    expect(isValidChannel("user_ABC")).toBe(false);
+  });
 });
 
 describe("encodeEvent / decodeEvent round-trip", () => {
@@ -50,6 +58,13 @@ describe("encodeEvent / decodeEvent round-trip", () => {
       presence: "join",
     };
     expect(decodeEvent(encodeEvent(e))).toEqual(e);
+  });
+
+  it("round-trips a notification event (recipient id only, no board needed)", () => {
+    const e: RealtimeEvent = { type: "notification", recipientId: "u9" };
+    const wire = encodeEvent(e);
+    expect(wire).not.toContain("title");
+    expect(decodeEvent(wire)).toEqual(e);
   });
 });
 
@@ -88,6 +103,13 @@ describe("decodeEvent — defensive parsing (never throws, drops bad input)", ()
       decodeEvent(
         JSON.stringify({ type: "presence", boardId: "b1", presence: "join" }),
       ),
+    ).toBeNull();
+  });
+
+  it("requires a recipientId on a notification event", () => {
+    expect(decodeEvent(JSON.stringify({ type: "notification" }))).toBeNull();
+    expect(
+      decodeEvent(JSON.stringify({ type: "notification", boardId: "b1" })),
     ).toBeNull();
   });
 
@@ -144,5 +166,21 @@ describe("canReceiveEvent — per-subscriber authorization (THE leak gate)", () 
     // A chat event must NOT be authorized by a task being visible — only board visibility counts.
     const chat: RealtimeEvent = { type: "chat", boardId: "b1", messageId: "m1" };
     expect(canReceiveEvent(MEMBER, chat, { taskVisible: true })).toBe(false);
+  });
+
+  it("delivers a notification ONLY to its recipient — and never to anyone else", () => {
+    const forMember: RealtimeEvent = { type: "notification", recipientId: "u-m" };
+    expect(canReceiveEvent(MEMBER, forMember, {})).toBe(true);
+    // A different user (even the CEO) must not receive another user's notification.
+    expect(canReceiveEvent(CEO, forMember, {})).toBe(false);
+    const forCeo: RealtimeEvent = { type: "notification", recipientId: "u-ceo" };
+    expect(canReceiveEvent(CEO, forCeo, {})).toBe(true);
+    expect(canReceiveEvent(MEMBER, forCeo, {})).toBe(false);
+  });
+
+  it("denies a notification with no recipient (fail closed)", () => {
+    expect(
+      canReceiveEvent(MEMBER, { type: "notification" } as RealtimeEvent, {}),
+    ).toBe(false);
   });
 });

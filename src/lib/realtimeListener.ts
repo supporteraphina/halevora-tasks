@@ -19,7 +19,12 @@
  * lazily reconnect on the next subscribe, re-issuing LISTEN for every still-subscribed channel.
  */
 import { Client } from "pg";
-import { boardChannel, decodeEvent, type RealtimeEvent } from "@/domain/realtime";
+import {
+  boardChannel,
+  userChannel,
+  decodeEvent,
+  type RealtimeEvent,
+} from "@/domain/realtime";
 
 type Subscriber = (event: RealtimeEvent) => void;
 
@@ -95,20 +100,20 @@ async function ensureClient(): Promise<Client> {
 }
 
 /**
- * Subscribe a callback to a board's channel. Ref-counts LISTEN: the first subscriber issues
- * `LISTEN board_<id>`; later ones just join the set. Returns an unsubscribe function that
+ * Subscribe a callback to a raw channel. Ref-counts LISTEN: the first subscriber issues
+ * `LISTEN <channel>`; later ones just join the set. Returns an unsubscribe function that
  * removes the callback and `UNLISTEN`s when the channel has no subscribers left.
  *
  * NOTE: this routes by channel only. The SSE route MUST still authorize each event for the
- * specific subscriber (re-query under scope) before writing it to that client's stream.
+ * specific subscriber (re-query under scope / recipient check) before writing it to that
+ * client's stream. The channel name shape is validated by construction (board_<cuid> /
+ * user_<cuid>), so quoting the identifier is safe.
  */
-export async function subscribeBoard(
-  boardId: string,
+async function subscribeChannel(
+  channel: string,
   onEvent: Subscriber,
 ): Promise<() => void> {
-  const channel = boardChannel(boardId);
   const h = hub();
-
   const client = await ensureClient();
 
   let subs = h.channels.get(channel);
@@ -119,7 +124,6 @@ export async function subscribeBoard(
   }
   subs.add(onEvent);
   if (isFirst) {
-    // Quote the identifier; the channel shape is validated (board_<cuid>) by construction.
     await client.query(`LISTEN "${channel}"`);
   }
 
@@ -133,4 +137,20 @@ export async function subscribeBoard(
       h.client?.query(`UNLISTEN "${channel}"`).catch(() => {});
     }
   };
+}
+
+/** Subscribe to a board's chat/presence/task-liveness channel. */
+export async function subscribeBoard(
+  boardId: string,
+  onEvent: Subscriber,
+): Promise<() => void> {
+  return subscribeChannel(boardChannel(boardId), onEvent);
+}
+
+/** Subscribe to a user's OWN notification channel (Section 12, user-targeted delivery). */
+export async function subscribeUser(
+  userId: string,
+  onEvent: Subscriber,
+): Promise<() => void> {
+  return subscribeChannel(userChannel(userId), onEvent);
 }

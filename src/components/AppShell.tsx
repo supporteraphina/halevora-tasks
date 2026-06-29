@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import styles from "./AppShell.module.css";
 import UserMenu from "./UserMenu";
+import HeaderTools from "./HeaderTools";
 
 interface Tab {
   href: string;
@@ -28,9 +29,13 @@ const TABS: Tab[] = [
 export default function AppShell({
   children,
   user,
+  userId,
+  initialUnread,
 }: {
   children: React.ReactNode;
   user?: { name: string; role: string } | null;
+  userId?: string | null;
+  initialUnread?: number;
 }) {
   const pathname = usePathname();
 
@@ -69,7 +74,12 @@ export default function AppShell({
             );
           })}
         </nav>
-        {user ? <UserMenu name={user.name} role={user.role} /> : null}
+        <div className={styles.right}>
+          {user && userId ? (
+            <HeaderTools userId={userId} initialUnread={initialUnread ?? 0} />
+          ) : null}
+          {user ? <UserMenu name={user.name} role={user.role} /> : null}
+        </div>
       </header>
       <main className={styles.main}>{children}</main>
     </div>
