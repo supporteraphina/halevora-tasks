@@ -12,20 +12,20 @@
 :root {
   color-scheme: dark;
 
-  /* ---- Neutrals: near-black, faint cool tint (hue ~262), layered for depth ---- */
-  --bg: oklch(0.185 0.005 262);          /* app shell background */
-  --bg-sunken: oklch(0.152 0.005 262);   /* board canvas / columns (recessed, deepest) */
-  --surface: oklch(0.214 0.006 262);     /* cards, panels (raised one step) */
-  --surface-2: oklch(0.252 0.007 262);   /* hover / pressed / inputs */
-  --surface-3: oklch(0.295 0.008 262);   /* menus, popovers, toasts (top layer) */
-  --border-subtle: oklch(0.245 0.005 262); /* hairline between same-ish layers */
-  --border: oklch(0.285 0.006 262);      /* default separator */
-  --border-strong: oklch(0.37 0.008 262); /* emphasized edges, input focus rest */
+  /* ---- Neutrals: TRUE BLACK base, neutral-gray surfaces (chroma 0), layered for depth ---- */
+  --bg: oklch(0.035 0 0);          /* app shell — near-true-black */
+  --bg-sunken: oklch(0 0 0);       /* board canvas / columns — pure black */
+  --surface: oklch(0.145 0 0);     /* cards, panels — lift clearly off black */
+  --surface-2: oklch(0.19 0 0);    /* hover / pressed / inputs */
+  --surface-3: oklch(0.225 0 0);   /* menus, popovers, toasts (top layer) */
+  --border-subtle: oklch(0.18 0 0); /* hairline between same-ish layers */
+  --border: oklch(0.24 0 0);       /* default separator (carries depth on black) */
+  --border-strong: oklch(0.34 0 0); /* emphasized edges, input focus rest */
 
-  /* ---- Text ---- */
-  --ink: oklch(0.97 0.003 262);          /* primary text */
-  --ink-muted: oklch(0.745 0.009 262);   /* secondary text (>=4.5:1 on surfaces) */
-  --ink-subtle: oklch(0.60 0.009 262);   /* icons / non-text only, never body copy */
+  /* ---- Text (neutral) ---- */
+  --ink: oklch(0.975 0 0);         /* primary text */
+  --ink-muted: oklch(0.72 0 0);    /* secondary text (>=4.5:1 on surfaces) */
+  --ink-subtle: oklch(0.56 0 0);   /* icons / non-text only, never body copy */
 
   /* ---- Brand / interactive: a clean, confident blue (NOT purple) ---- */
   --primary: oklch(0.625 0.17 252);
@@ -121,7 +121,7 @@
   --hairline-top: inset 0 1px 0 oklch(1 0 0 / 0.04);
 
   /* ---- Scrim (modal/panel backdrop) ---- */
-  --scrim: oklch(0.08 0.01 262 / 0.62);
+  --scrim: oklch(0 0 0 / 0.66);
 
   /* ---- Z-index scale (semantic) ---- */
   --z-base: 0;

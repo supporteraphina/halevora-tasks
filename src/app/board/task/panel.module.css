@@ -177,9 +177,11 @@
   field-sizing: content;
   /* One full line tall by default so a single-line title is never clipped;
      field-sizing grows it for wrapped titles. block display avoids the
-     inline baseline gap that left descenders peeking above the fold. */
+     inline baseline gap that left descenders peeking above the fold.
+     min-height must include the textarea's own padding (border-box) or the
+     line is taller than its box and the glyph tops clip. */
   display: block;
-  min-height: calc(var(--fs-xl) * var(--lh-snug));
+  min-height: calc(var(--fs-xl) * var(--lh-snug) + 2 * var(--space-2));
   overflow: hidden;
 }
 

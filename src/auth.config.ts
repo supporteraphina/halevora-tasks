@@ -12,6 +12,10 @@ import type { NextAuthConfig } from "next-auth";
 import type { Role } from "@prisma/client";
 
 export const authConfig = {
+  // Self-hosted (not on Vercel): trust the deployment host. Without this, Auth.js v5
+  // throws UntrustedHost in production (`npm start`), breaking login. Override the host
+  // via AUTH_URL in production if it sits behind a proxy.
+  trustHost: true,
   pages: {
     signIn: "/login",
   },
