@@ -33,19 +33,45 @@ import { PRIORITIES } from "@/domain/priority";
 import { QUICK_CHOICES } from "@/domain/dates";
 import { formatTimeEstimate } from "@/domain/taskDetail";
 import { formatInZone, dateInputValue } from "@/domain/dates";
-import { DescriptionEditor } from "./DescriptionEditor";
-import {
-  CustomFieldsSection,
-  AttachmentsSection,
-  ActivitySection,
-  DependenciesSection,
-  RecurrenceSection,
-} from "./TaskPanelExtras";
+import dynamic from "next/dynamic";
 import { saveAsTemplateAction } from "@/app/board/templates/actions";
 import { TaskErrorBoundary, useReportActionError } from "./actionError";
 import type { TaskDetail, PickerData } from "./data";
 import type { Status, Priority } from "@prisma/client";
 import styles from "./panel.module.css";
+
+// Defer the editor-heavy parts of the panel so a card opens INSTANTLY: the description
+// editor and the lower sections (custom fields, attachments, comments+activity,
+// dependencies, recurrence) pull in Tiptap and other weight. `ssr: false` keeps them out
+// of the panel's first paint; they stream in a beat later. The top of the panel (status,
+// assignees, dates, priority, tags, subtasks, checklists) renders immediately.
+const editorFallback = () => (
+  <div className={styles.sectionLoading} aria-hidden="true" />
+);
+const DescriptionEditor = dynamic(
+  () => import("./DescriptionEditor").then((m) => m.DescriptionEditor),
+  { ssr: false, loading: editorFallback },
+);
+const CustomFieldsSection = dynamic(
+  () => import("./TaskPanelExtras").then((m) => m.CustomFieldsSection),
+  { ssr: false },
+);
+const AttachmentsSection = dynamic(
+  () => import("./TaskPanelExtras").then((m) => m.AttachmentsSection),
+  { ssr: false },
+);
+const ActivitySection = dynamic(
+  () => import("./TaskPanelExtras").then((m) => m.ActivitySection),
+  { ssr: false },
+);
+const DependenciesSection = dynamic(
+  () => import("./TaskPanelExtras").then((m) => m.DependenciesSection),
+  { ssr: false },
+);
+const RecurrenceSection = dynamic(
+  () => import("./TaskPanelExtras").then((m) => m.RecurrenceSection),
+  { ssr: false },
+);
 
 const BADGE_VARS: Record<BadgeKey, string> = {
   TODO: "todo",

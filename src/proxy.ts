@@ -43,6 +43,14 @@ export default auth((req) => {
 });
 
 export const config = {
-  // Run on everything except Next internals, the auth API, and static assets.
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
+  // Run on everything except Next internals, static assets, and the API routes that do
+  // their OWN auth and must be reachable WITHOUT a session cookie:
+  //   - api/auth          : Auth.js handlers
+  //   - api/health        : public keep-warm / liveness ping
+  //   - api/recurrence/run, api/automation/run : cron-triggered workers (Bearer CRON_SECRET
+  //     or CEO session — gated inside the handler). Without this exclusion the proxy would
+  //     307 a Bearer-only cron request to /login and the scheduled jobs would never fire.
+  matcher: [
+    "/((?!api/auth|api/health|api/recurrence/run|api/automation/run|_next/static|_next/image|favicon.ico).*)",
+  ],
 };

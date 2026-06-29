@@ -160,6 +160,31 @@
   gap: var(--space-4);
 }
 
+/* Placeholder while a deferred (lazy-loaded) section streams in — reserves height so the
+   panel does not jump as the editor / lower sections hydrate. */
+.sectionLoading {
+  min-height: 4.5rem;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    90deg,
+    var(--surface) 0%,
+    var(--surface-2) 50%,
+    var(--surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: hv-shimmer 1.2s ease-in-out infinite;
+  opacity: 0.6;
+}
+
+@keyframes hv-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sectionLoading { animation: none; }
+}
+
 /* ---- Title ---- */
 .title {
   font-size: var(--fs-2xl);

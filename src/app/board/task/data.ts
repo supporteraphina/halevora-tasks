@@ -203,6 +203,7 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetail | null>
       },
       comments: {
         orderBy: { createdAt: "desc" },
+        take: 50, // most recent 50; bounds load time on a heavily-commented task.
         select: {
           id: true,
           body: true,
