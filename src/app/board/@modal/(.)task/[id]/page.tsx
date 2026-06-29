@@ -10,5 +10,7 @@ export default async function InterceptedTaskModal({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <TaskDetailView taskId={id} />;
+  // `intercepted` => close pops history (router.back) so the @modal slot resets and the
+  // overlay actually closes; a push to /board would leave the panel on screen.
+  return <TaskDetailView taskId={id} intercepted />;
 }

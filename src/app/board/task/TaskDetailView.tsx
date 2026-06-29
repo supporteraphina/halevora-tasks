@@ -9,7 +9,14 @@ import TaskPanelClient from "./TaskPanelClient";
  * Loads the SCOPED task detail (a client id is untrusted — an invisible/foreign id 404s),
  * the picker data, and whether AI assist is available, then renders the client panel.
  */
-export default async function TaskDetailView({ taskId }: { taskId: string }) {
+export default async function TaskDetailView({
+  taskId,
+  intercepted = false,
+}: {
+  taskId: string;
+  /** True when rendered by the @modal intercept route (close pops history to reset the slot). */
+  intercepted?: boolean;
+}) {
   const actor = await currentActor();
   if (!actor) redirect("/login");
 
@@ -29,6 +36,7 @@ export default async function TaskDetailView({ taskId }: { taskId: string }) {
       currentUserId={actor.userId}
       isCeo={actor.role === "CEO"}
       aiEnabled={aiEnabled}
+      intercepted={intercepted}
     />
   );
 }
