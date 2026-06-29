@@ -153,6 +153,24 @@
   margin-right: auto;
 }
 
+.colAutomation {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  color: var(--ink-subtle);
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.colAutomation:hover {
+  background: var(--surface-2);
+  color: var(--primary-strong);
+}
+
 .colCount {
   font-size: var(--fs-sm);
   color: var(--ink-muted);

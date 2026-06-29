@@ -62,7 +62,7 @@ export default async function BoardPage() {
           </ul>
         </aside>
 
-        <Board columns={board.columns} />
+        <Board columns={board.columns} isCeo={actor.role === "CEO"} />
       </div>
     </div>
   );

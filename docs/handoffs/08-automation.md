@@ -1,8 +1,10 @@
-# Handoff 08 — Automation (engine + execution)   (status: PARTIAL — 8a COMPLETE, 8b PENDING)
+# Handoff 08 — Automation (engine + execution + builder UI)   (status: COMPLETE)
 
-> Section 8 is split per the §6 plan: **8a = engine / execution / hooks / run log /
-> time-based pass** (this handoff, DONE + verified) and **8b = builder UI** (resume point in
-> §6 below). The pure engine vocabulary 8b must render is in §6.
+> Section 8 was split per the §6 plan: **8a = engine / execution / hooks / run log /
+> time-based pass** (DONE + verified) and **8b = builder UI** (DONE + verified, §7 below).
+> 8b built the builder UI **on top of** the 8a engine — it assembles + server-validates rule
+> JSON via the engine's `parseRule` and never re-implements engine branching. The pure engine
+> vocabulary the builder renders is in §6; the 8b additions are in §7.
 
 ## 1. Bootstrap (read only these)
 - `docs/handoffs/00-START-HERE.md` (spec; §4 load-bearing decisions, §5 scope)
@@ -192,3 +194,76 @@ vocabulary via `parseRule` (reject if it returns null or drops everything).
 - CEO-gate every rule mutation (`requireRole("CEO")`) and scope to the board.
 - Do NOT re-implement engine logic in the UI — render the vocabulary, store Json, let the
   8a engine evaluate. Run `halevora-permissions-audit` + `halevora-qa-gate` before handoff.
+
+## 7. What 8b built (Automation builder UI) — COMPLETE
+
+A per-board, **CEO-only** builder UI that assembles + server-validates rule JSON and drives
+the 8a engine. It renders EXACTLY the 8a vocabulary; no engine branching lives in the UI.
+
+- **Builder surface, `/board/automation/[boardId]`** (full page, CEO-gated). Reached from a
+  per-column **Automations** affordance (a bolt icon) in the board column header, shown to a
+  CEO only (`src/app/board/Board.tsx`). The page is the same CEO redirect-gate shape as
+  `/admin/users` (`currentActor()` → `redirect("/board")` for a non-CEO).
+  - **Rule list:** name, an enable/disable toggle, the human-readable trigger→action summary,
+    up/down reorder (writes `order`), Edit, Delete. A "Needs attention" pill flags any stored
+    rule that no longer parses. Empty state teaches the feature.
+  - **Rule editor** (inline, three numbered steps): **trigger picker** → **condition rows**
+    (field × operator × value, add/remove, AND/OR match mode) → **action rows** (type + the
+    relevant param, add/remove, ordered). The value/param control swaps by field/action type
+    (status & priority dropdowns, people picker, date input, tag datalist, free text). The
+    `status_changed` / `priority_changed` destination and the `scheduled` cadence/interval are
+    rendered inline. Editing an existing rule re-hydrates the Draft from the stored JSON.
+- **Pure summary helper (TDD), `src/domain/automationSummary.ts` (+ `.test.ts`, 13 tests).**
+  `summarizeTrigger` / `summarizeCondition` / `summarizeAction(s)` turn the engine's
+  discriminated-union vocabulary into the list's short sentences. Pure, defensive (a bad rule
+  yields a safe fallback string), framework-free — LABELS only, never a fire decision.
+- **CEO-gated, board-scoped server actions, `src/app/board/automation/actions.ts`:**
+  `createRuleAction` / `updateRuleAction` / `toggleRuleAction` / `deleteRuleAction` /
+  `reorderRuleAction`. EACH calls `requireRole("CEO")` as its first statement (throws
+  `FORBIDDEN` for a member — server-enforced, not UI-hidden) and verifies the board exists.
+  - **Server-side validation via the 8a engine.** `assembleAndValidate` builds the candidate
+    in the SAME shape the DB stores, runs it through `parseRule`, and rejects it if `parseRule`
+    returns null (unknown trigger) OR every action dropped out — the client JSON is never
+    trusted. The raw (engine-blessed) JSON is what gets persisted.
+  - **Scheduled clock.** For a `scheduled` trigger, `computeNextRunAt` sets the initial
+    `nextRunAt` = first occurrence strictly after now (anchored on now, actor timezone) via the
+    recurrence module's `nextOccurrence` — mirroring `setRecurrenceAction`. Event-driven
+    triggers leave `nextRunAt` null. The actions append NOTHING to `AutomationRunLog` (that is
+    the engine's job); they `revalidatePath` the board + rules page.
+- **Data loader, `src/app/board/automation/data.ts`:** loads the board, its rules (engine
+  run-order), and the user/tag pickers; pre-computes each rule's summary + a `valid` flag.
+  Reads NO task data — the builder is board-level config, so there is no row-level task leak
+  surface (permissions audit confirmed).
+
+### 8b files added/changed
+- `src/domain/automationSummary.ts` + `.test.ts` — pure summary/label helper (NEW, TDD, 13 tests).
+- `src/app/board/automation/actions.ts` — CEO-gated create/update/delete/reorder/toggle; assembles + `parseRule`-validates; computes scheduled `nextRunAt` (NEW).
+- `src/app/board/automation/data.ts` — board + rules + pickers loader (NEW).
+- `src/app/board/automation/[boardId]/page.tsx` — CEO redirect-gated page (NEW).
+- `src/app/board/automation/[boardId]/AutomationManager.tsx` — the client builder (list + editor) (NEW).
+- `src/app/board/automation/[boardId]/automation.module.css` — dark-theme, token-only styles, all states + mobile (NEW).
+- `src/app/board/Board.tsx` + `board.module.css` — per-column CEO-only Automations affordance (CHANGED).
+- `src/app/board/page.tsx` — passes `isCeo` to `<Board>` (CHANGED).
+
+### 8b verified (this session)
+- `npm run typecheck` clean · `npm test` **218/218** (was 205; +13 summary tests, existing stay green) · `npm run build` clean (`/board/automation/[boardId]` route present) · `prisma validate` + `migrate status` in sync (NO new migration — 8b adds no schema).
+- **Browser smoke (chrome-devtools), CEO=Noel, Client Success board:** built a rule via the
+  builder (trigger `status_changed`→DONE, action `add_tag "shipped"`) → it persisted + appeared
+  in the list with the correct summary. Marked a task DONE → the **8a engine applied the rule**:
+  the `shipped` tag appeared on the task and the activity logged
+  `Noel Pollak ran the automation "Tag shipped work when Done"` — proving the UI-built rule
+  drives the engine end-to-end. Edited the rule (added a Priority condition, re-validated +
+  saved). Toggled it **disabled** → marking another task DONE applied NO tag and logged no
+  automation activity (disabled rule inert). Deleted it → back to the empty state. No console
+  errors. Desktop + 390px mobile screenshots captured (editor stacks correctly).
+- **Member-blocked (member1):** the Automations affordance is absent from the board, and direct
+  navigation to `/board/automation/<id>` **redirects to /board** (server-enforced). Every action
+  is additionally `requireRole("CEO")`-guarded (throws FORBIDDEN), so a member POST is rejected
+  at the data layer, not merely hidden.
+- **Permissions audit: PASS** (0 leaks) — CEO-only surface at both the page (redirect) and action
+  (`src/app/board/automation/actions.ts:129` `const actor = await requireRole("CEO");`) layers;
+  the builder reads NO task rows; **8a engine paths unchanged** (only the pure `automationSummary`
+  helper is new in `src/domain`).
+- **Smoke data reset to seed:** the two smoke tasks restored (Draft Q3 → IN_PROGRESS, tag removed;
+  renewal → TODO); smoke `automation_ran` rows on Client Success deleted; Client Success has 0
+  rules; the 2 seeded Innovations rules untouched.

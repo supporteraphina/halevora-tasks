@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   createTaskAction,
@@ -49,7 +50,13 @@ interface DragState {
   fromBoardId: string;
 }
 
-export default function Board({ columns }: { columns: BoardColumn[] }) {
+export default function Board({
+  columns,
+  isCeo,
+}: {
+  columns: BoardColumn[];
+  isCeo: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -86,6 +93,7 @@ export default function Board({ columns }: { columns: BoardColumn[] }) {
           <Column
             key={col.id}
             column={col}
+            isCeo={isCeo}
             now={now}
             drag={drag}
             dropTarget={dropTarget}
@@ -112,6 +120,7 @@ export default function Board({ columns }: { columns: BoardColumn[] }) {
 
 function Column({
   column,
+  isCeo,
   now,
   drag,
   dropTarget,
@@ -121,6 +130,7 @@ function Column({
   onDrop,
 }: {
   column: BoardColumn;
+  isCeo: boolean;
   now: Date;
   drag: DragState | null;
   dropTarget: { boardId: string; index: number } | null;
@@ -177,6 +187,24 @@ function Column({
           aria-hidden="true"
         />
         <h2 className={styles.colName}>{column.name}</h2>
+        {isCeo ? (
+          <Link
+            href={`/board/automation/${column.id}`}
+            className={styles.colAutomation}
+            title={`Automations for ${column.name}`}
+            aria-label={`Automations for ${column.name}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </Link>
+        ) : null}
         <span className={styles.colCount}>{column.cards.length}</span>
       </header>
 
