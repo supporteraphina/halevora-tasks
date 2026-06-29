@@ -12,7 +12,6 @@
   position: absolute;
   inset: 0;
   background: var(--scrim);
-  animation: fade var(--dur-base) var(--ease-out);
 }
 
 .panel {
@@ -21,31 +20,10 @@
   max-width: 100vw;
   height: 100%;
   background: var(--bg);
-  border-left: 1px solid var(--border);
-  box-shadow: var(--shadow-lg);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg), var(--hairline-top);
   display: flex;
   flex-direction: column;
-  animation: slideIn var(--dur-slow) var(--ease-out);
-}
-
-@keyframes fade {
-  from {
-    opacity: 0;
-  }
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(2rem);
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .backdrop,
-  .panel {
-    animation: none;
-  }
 }
 
 /* ---- Header ---- */
@@ -105,6 +83,12 @@
   font-size: var(--fs-sm);
   cursor: pointer;
 }
+.headerBtn {
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
 .headerBtn:hover {
   background: var(--surface-2);
   color: var(--ink);
@@ -115,16 +99,18 @@
   position: absolute;
   top: calc(100% + var(--space-1));
   right: 0;
-  z-index: 20;
+  z-index: var(--z-dropdown);
   min-width: 16rem;
-  background: var(--surface);
+  background: var(--surface-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-pop);
   padding: var(--space-3);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  transform-origin: top right;
+  animation: hv-pop var(--dur-base) var(--ease-spring) both;
 }
 
 .headerMenuTitle {
@@ -249,6 +235,13 @@
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   cursor: pointer;
+  transition: filter var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.statusBadge:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .statusBadge:disabled {
@@ -304,9 +297,11 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-2);
+  box-shadow: var(--shadow-card), var(--hairline-top);
 }
 
 .field {
@@ -315,6 +310,14 @@
   align-items: center;
   gap: var(--space-3);
   min-height: 2.25rem;
+  padding-inline: var(--space-2);
+  margin-inline: calc(-1 * var(--space-1));
+  border-radius: var(--radius-md);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.field:hover {
+  background: var(--surface-2);
 }
 
 .fieldLabel {
@@ -375,14 +378,16 @@
   max-width: 20rem;
   max-height: 18rem;
   overflow-y: auto;
-  background: var(--surface);
+  background: var(--surface-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-pop);
   padding: var(--space-2);
   display: flex;
   flex-direction: column;
   gap: 2px;
+  transform-origin: top left;
+  animation: hv-pop var(--dur-base) var(--ease-spring) both;
 }
 
 .menuGroup {
@@ -829,10 +834,20 @@
   border-color: var(--primary);
 }
 
+.check {
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
 .check[data-done] {
   background: var(--success);
   border-color: var(--success);
   color: var(--on-primary);
+}
+
+/* Pop the checkmark when an item is completed. */
+.check[data-done] svg {
+  animation: hv-check-pop var(--dur-base) var(--ease-spring) both;
 }
 
 .subtaskTitle,
@@ -851,12 +866,14 @@
 
 /* ---- Checklist block ---- */
 .checklist {
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  box-shadow: var(--shadow-card);
 }
 
 .checklistHeader {
@@ -927,9 +944,11 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-2);
+  box-shadow: var(--shadow-card), var(--hairline-top);
 }
 
 .cfRow {

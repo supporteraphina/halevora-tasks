@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <main className={styles.screen}>
-      <div className={styles.card}>
+      <div className={`${styles.card} hv-modal-in`}>
         <div className={styles.brand}>
           <span className={styles.mark} aria-hidden="true">
             <svg width="24" height="24" viewBox="0 0 20 20" fill="none">

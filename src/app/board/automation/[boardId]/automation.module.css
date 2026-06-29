@@ -87,14 +87,26 @@
   align-items: stretch;
   gap: var(--space-2);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-2) var(--space-3);
-  transition: border-color var(--dur-fast) var(--ease-out);
+  box-shadow: var(--shadow-card);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  animation: hv-rise-sm var(--dur-base) var(--ease-out) both;
 }
+
+.ruleList > .ruleRow:nth-child(1) { animation-delay: 40ms; }
+.ruleList > .ruleRow:nth-child(2) { animation-delay: 75ms; }
+.ruleList > .ruleRow:nth-child(3) { animation-delay: 110ms; }
+.ruleList > .ruleRow:nth-child(4) { animation-delay: 145ms; }
+.ruleList > .ruleRow:nth-child(n + 5) { animation-delay: 170ms; }
 
 .ruleRow:hover {
   border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 .ruleRow[data-disabled] {
@@ -266,8 +278,10 @@
   gap: var(--space-3);
   padding: var(--space-7) var(--space-5);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card), var(--hairline-top);
+  animation: hv-rise var(--dur-slow) var(--ease-out) both;
 }
 
 .emptyMark {
@@ -298,9 +312,11 @@
   flex-direction: column;
   gap: var(--space-4);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-5);
+  box-shadow: var(--shadow-card), var(--hairline-top);
+  animation: hv-rise var(--dur-slow) var(--ease-out) both;
 }
 
 .editorHead {

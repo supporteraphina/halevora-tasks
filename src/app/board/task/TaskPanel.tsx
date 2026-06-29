@@ -181,8 +181,8 @@ export default function TaskPanel({
 
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Task detail">
-      <div className={styles.backdrop} onClick={onClose} aria-hidden="true" />
-      <aside className={styles.panel} ref={panelRef} tabIndex={-1}>
+      <div className={`${styles.backdrop} hv-scrim`} onClick={onClose} aria-hidden="true" />
+      <aside className={`${styles.panel} hv-drawer`} ref={panelRef} tabIndex={-1}>
         <TaskErrorBoundary className={styles.actionErrorToast}>
         <header className={styles.panelHeader}>
           <span className={styles.breadcrumb}>{task.boardName}</span>

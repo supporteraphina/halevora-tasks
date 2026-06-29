@@ -65,7 +65,7 @@ async function main() {
 
   // --- Boards (ClickUp Lists) -------------------------------------------
   const boardSeeds = [
-    { name: "Innovations", color: "#7C5CFF", order: 0 },
+    { name: "Innovations", color: "#3B82F6", order: 0 },
     { name: "Client Success", color: "#22C55E", order: 1 },
     { name: "Meta Ads", color: "#F59E0B", order: 2 },
   ];
@@ -84,7 +84,7 @@ async function main() {
 
   // --- Tags --------------------------------------------------------------
   const tagSeeds = [
-    { name: "design", color: "#7C5CFF" },
+    { name: "design", color: "#60A5FA" },
     { name: "urgent", color: "#EF4444" },
     { name: "research", color: "#3B82F6" },
   ];

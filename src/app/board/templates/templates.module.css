@@ -63,9 +63,26 @@
   justify-content: space-between;
   gap: var(--space-3);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
+  box-shadow: var(--shadow-card), var(--hairline-top);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  animation: hv-rise-sm var(--dur-base) var(--ease-out) both;
+}
+
+.list > .card:nth-child(1) { animation-delay: 40ms; }
+.list > .card:nth-child(2) { animation-delay: 75ms; }
+.list > .card:nth-child(3) { animation-delay: 110ms; }
+.list > .card:nth-child(4) { animation-delay: 145ms; }
+.list > .card:nth-child(n + 5) { animation-delay: 170ms; }
+
+.card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 .cardMain {
@@ -176,9 +193,18 @@
   border-radius: var(--radius-md);
   cursor: pointer;
   white-space: nowrap;
+  box-shadow: var(--shadow-card);
+  transition: background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-instant) var(--ease-out);
 }
 .applyBtn:hover:not(:disabled) {
   background: var(--primary-strong);
+  box-shadow: var(--shadow-md);
+}
+.applyBtn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-card);
 }
 .applyBtn:disabled {
   opacity: 0.6;

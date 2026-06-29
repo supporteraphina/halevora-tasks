@@ -138,6 +138,8 @@
   gap: var(--space-3);
   align-items: flex-start;
   max-width: var(--prose-measure);
+  /* Each message rises gently as it lands. */
+  animation: hv-rise-sm var(--dur-base) var(--ease-out) both;
 }
 
 .message[data-mine] {
@@ -160,10 +162,11 @@
 
 .bubble {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-2) var(--space-3);
   min-width: 0;
+  box-shadow: var(--shadow-card);
 }
 
 .message[data-mine] .bubble {
@@ -224,14 +227,16 @@
   bottom: calc(100% + var(--space-2));
   left: 0;
   width: min(18rem, 100%);
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-pop);
   padding: var(--space-1);
   z-index: var(--z-dropdown);
   max-height: 14rem;
   overflow-y: auto;
+  transform-origin: bottom left;
+  animation: hv-pop var(--dur-base) var(--ease-spring) both;
 }
 
 .mentionOption {
@@ -273,10 +278,15 @@
   line-height: var(--lh-normal);
 }
 
+.input {
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
 .input:focus-visible {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--ring);
+  box-shadow: 0 0 0 3px var(--primary-softer);
 }
 
 .send {
@@ -289,11 +299,18 @@
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-instant) var(--ease-out);
 }
 
 .send:hover:not(:disabled) {
   background: var(--primary-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.send:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .send:disabled {

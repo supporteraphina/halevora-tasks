@@ -1,12 +1,33 @@
 .screen {
+  position: relative;
   min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: var(--space-5);
   background: var(--bg-sunken);
+  overflow: hidden;
+}
+
+/* Soft blue aura behind the card — depth without a hard gradient seam. */
+.screen::before {
+  content: "";
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  width: min(36rem, 90vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    circle,
+    var(--primary-softer) 0%,
+    transparent 68%
+  );
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .card {
+  position: relative;
   width: 100%;
   max-width: 22rem;
   display: flex;
@@ -16,7 +37,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg), var(--hairline-top);
 }
 
 .brand {
@@ -73,16 +94,24 @@
   border-radius: var(--radius-md);
   color: var(--ink);
   font-size: var(--fs-base);
-  transition: border-color var(--dur-fast) var(--ease-out);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
 
 .input::placeholder {
   color: var(--ink-subtle);
 }
 
+.input:hover {
+  border-color: var(--border-strong);
+}
+
 .input:focus {
   outline: none;
   border-color: var(--primary);
+  background: var(--surface-2);
+  box-shadow: 0 0 0 3px var(--primary-softer);
 }
 
 .error {
@@ -103,12 +132,21 @@
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--fs-base);
-  font-weight: var(--fw-medium);
-  transition: background var(--dur-fast) var(--ease-out);
+  font-weight: var(--fw-semibold);
+  box-shadow: var(--shadow-card);
+  transition: background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-instant) var(--ease-out);
 }
 
 .submit:hover:not(:disabled) {
   background: var(--primary-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.submit:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-card);
 }
 
 .submit:disabled {
