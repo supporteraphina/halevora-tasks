@@ -20,7 +20,7 @@ We're not reinventing the wheel. The board will look and feel like ClickUp's, be
 
 ## What it looks like
 
-Picture ClickUp's Board view.
+Picture ClickUp's Board view. The look mirrors ClickUp's familiar dark board, so anyone who has used ClickUp will feel at home from the first click.
 
 Columns run across the screen. Each column is a **Board**: one workstream, like Innovations, Client Success, Lucky Phone Farm, or Meta Ads. Inside each column sit **task cards**. You drag a card from one column to another to move the work along. Click any card to open a detail panel with everything about that task.
 
@@ -34,13 +34,14 @@ This is the first full version. Everything here is planned and agreed.
 - Group work into Boards (columns), one per workstream, each with its own chat.
 - Create tasks as cards.
 - Move a task through its stages: To Do, then In Progress, then Done, then Reviewed.
+- Add many tasks fast with a quick-entry view, without opening each one.
 - See what's late. Overdue tasks flag themselves automatically once the due date passes.
 - Once a task is Reviewed, it leaves the board and moves into a separate Reviewed list, so the board stays clean.
 
 **On each task**
 - Assign it to one person or several.
-- Set a due date with a calendar picker.
-- Write a full description with formatting, like a mini document.
+- Set a start date and a due date with a calendar picker.
+- Write a full description with formatting, like a mini document, with optional AI help to draft it.
 - Break it into subtasks, or add a quick checklist of small to-dos.
 - Add a time estimate, tags, a star rating, and a progress slider.
 - Leave comments and read the full history of who changed what and when.

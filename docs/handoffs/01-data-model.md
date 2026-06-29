@@ -21,7 +21,7 @@ logic yet beyond one pure domain helper. Stack: Next.js 16 (App Router, TS) + Pr
 - `src/lib/prisma.ts` — PrismaClient singleton (default export).
 - `.env.example` (committed) / `.env` (gitignored) — both connection strings, password = `[YOUR-PASSWORD]`.
 - `PRODUCT.md`, `DESIGN.md`, `docs/intent-context.md` — strategy + visual system + intent context.
-- `src/styles/tokens.css` — OKLCH light-theme tokens (color roles, type scale, spacing, radii, shadows, z-index, motion).
+- `src/styles/tokens.css` — OKLCH **dark-theme** tokens (matches Noel's screenshots; color roles, type scale, spacing, radii, shadows, z-index, motion; `color-scheme: dark`).
 - `src/styles/globals.css` — reset + base styles via tokens; reduced-motion rule.
 - `src/components/AppShell.tsx` (+ `.module.css`) — sticky top nav (Board / My Tasks / Calendar / Chat), active-tab state.
 - `src/components/Placeholder.tsx`, `src/components/page.module.css` — shared page + empty-state styles.
@@ -62,9 +62,10 @@ logic yet beyond one pure domain helper. Stack: Next.js 16 (App Router, TS) + Pr
 **First 3 steps:**
 1. Put the real Supabase password in `.env` (both URLs). Confirm connectivity: `npx prisma validate`,
    then a trivial `npx prisma migrate dev --name init` once the first models exist.
-2. Model the schema: `User` (+ `Role` enum CEO|MEMBER), `Board` (+ board chat messages), `Task`
+2. Model the schema: `Workspace` + `Project`/`Board` hierarchy (the "Team Space / Halevora"
+   breadcrumb), `User` (+ `Role` enum CEO|MEMBER), `Board` (+ board chat messages), `Task`
    (`Status` enum `TODO|IN_PROGRESS|DONE|REVIEWED` — mirror `src/domain/status.ts`; `priority`,
-   `dueAt` UTC, soft-delete `archivedAt`, ordering field), Task↔User assignees (many-to-many),
+   `startAt` + `dueAt` UTC, soft-delete `archivedAt`, ordering field), Task↔User assignees (many-to-many),
    `Subtask`, `Checklist`/`ChecklistItem`, `Tag`, `Comment`, `ActivityLog`, `Attachment`, custom
    fields (text/number/checkbox/date/dropdown/labels/rating/people/slider), `TaskDependency`
    (with cycle-prevention in app logic later), `TaskTemplate`, `AutomationRule`

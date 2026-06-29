@@ -58,6 +58,7 @@ without a manual; quietly better-made than the tool it replaces.
 - WCAG 2.2 AA. Body text contrast >=4.5:1, large text >=3:1, including placeholder and muted text.
 - Full keyboard operability for the board: focus, move cards, open detail, navigate views.
 - `prefers-reduced-motion` honored on every transition (crossfade or instant fallback).
-- Light theme only for v1. Color is never the sole carrier of status or priority (pair with text
-  or icon).
+- Dark theme for v1, matching Noel's ClickUp screenshots (a dark blue-gray surface with an
+  indigo-violet brand). Contrast verified on dark surfaces. Color is never the sole carrier of
+  status or priority (pair with text or icon). A light theme can return later via tokens.
 - International team: plain language, store UTC and render per-user time zone.

@@ -5,20 +5,22 @@ defined in [src/styles/tokens.css](src/styles/tokens.css); this document explain
 
 ## Theme
 
-Light theme only. A pure-white app surface (`--bg`) with a faintly cool-tinted sunken canvas
-(`--bg-sunken`) for the board and its columns. The indigo-violet brand (hue ~286) carries identity
-through primary actions, selection, and the focus ring; the surface stays neutral. Color strategy:
-**Restrained** (tinted neutrals + one accent). The mood is an early-morning studio: clean light,
-everything in its place.
+Dark theme, matching Noel's ClickUp screenshots. A dark blue-gray app surface (`--bg`) with a
+deeper sunken canvas (`--bg-sunken`) for the board, and slightly raised cards (`--surface`). The
+indigo-violet brand (hue ~286) carries identity through primary actions, selection, and the focus
+ring; the surface stays neutral. Color strategy: **Restrained** (tinted dark neutrals + one
+accent). `color-scheme: dark` is set so native controls and scrollbars render dark. The token
+architecture is variable-based, so a light theme can return later via an alternate `:root` block.
 
 ## Color
 
 OKLCH throughout. Roles, not raw values (see `tokens.css`):
 
-- **Surfaces:** `--bg` (app), `--bg-sunken` (board/columns), `--surface` (cards/panels/menus),
-  `--surface-2` (hover/raised). Cards are white on the sunken canvas, separated by `--border`.
-- **Text:** `--ink` (primary, >=4.5:1 on white), `--ink-muted` (secondary, >=4.5:1), `--ink-subtle`
-  (icons and non-text only, never body copy).
+- **Surfaces:** `--bg` (app), `--bg-sunken` (board/columns, recessed), `--surface`
+  (cards/panels/menus, raised), `--surface-2` (hover/raised). Cards sit above the darker canvas,
+  separated by `--border`.
+- **Text:** `--ink` (primary near-white), `--ink-muted` (secondary, >=4.5:1 on surfaces),
+  `--ink-subtle` (icons and non-text only, never body copy).
 - **Brand / interactive:** `--primary`, `--primary-strong` (hover/active), `--primary-weak`
   (selected/hover tint), `--on-primary` (text on primary), `--ring` (focus).
 - **Semantic states:** `--success`, `--warning`, `--danger`, `--info`, each with a `-weak` tint.

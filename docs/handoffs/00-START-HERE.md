@@ -17,7 +17,8 @@ Goal: match ClickUp's **layout and mechanics**; craft/quality is governed by the
   - Use the **direct/session** connection (`DIRECT_URL`, port 5432) for the realtime `LISTEN/NOTIFY` worker — Supabase's transaction pooler can't `LISTEN`.
 - **Auth.js (NextAuth) Credentials** — own `User` table (NOT Supabase Auth). Roles: `CEO` | `MEMBER`.
 - **Realtime:** SSE + Postgres `NOTIFY` (chat + live board). No Pusher/Ably.
-- **Rich text:** Tiptap. **Storage:** Supabase Storage (attachments). **Theme:** light.
+- **Rich text:** Tiptap. **Storage:** Supabase Storage (attachments). **Theme:** dark (matches
+  Noel's ClickUp screenshots; token architecture allows a light theme later).
 - Validate every section with `npm run typecheck` + `npm test` + a focused preview check.
 
 ## 3. Naming
@@ -38,6 +39,8 @@ Goal: match ClickUp's **layout and mechanics**; craft/quality is governed by the
 
 **◆ Pulled into v1 (CEO request, 2026-06-29):** task dependencies (blocking / waiting-on links) · checklists · bulk edit · reusable task templates · **automation builder** (build-your-own trigger/condition/action rules engine + editor).
 
+**◇ Added from source review (Noel's voice notes + screenshots, 2026-06-29):** **dark theme** one-to-one with the screenshots · explicit **start date** (alongside due date) · **"Add Tasks Quickly"** fast-entry view (enter-to-create many tasks) · **workspace breadcrumb + left project selector** chrome (e.g. "Team Space / Halevora") · **AI-assisted description** (Tiptap editor with a Claude-powered writing prompt) · **richer Calendar** (week/day views + drag task to a date) · **custom/saved views** ("Add view") + a Quick view. ClickUp status menu grouping (Not started: TODO/OVERDUE · Active: IN_PROGRESS · Done · Closed: REVIEWED) and the date-picker quick choices (Today/Later/Tomorrow/This weekend/Next week/2 weeks/4 weeks) are part of the one-to-one match.
+
 **Backlog (NOT v1):** time-tracking timer (stopwatch), WIP limits, watchers/followers, dedicated **offline mobile app** (the web app IS mobile-responsive per §13 Polish; only a separate installable offline PWA is deferred), deep custom-fields engine (build only the field types v1 needs: text, number, checkbox, date, dropdown, labels, rating, people, slider/manual_progress).
 
 ## 6. Build partitions (one chat each, ~300–400k token budget)
@@ -45,16 +48,16 @@ After EACH section, write `docs/handoffs/NN-<slug>.md` (template in §8) and sto
 
 | # | Section | Depends on |
 |---|---|---|
-| 0 | Scaffold + design system (Next.js+TS+Prisma+Auth.js, Supabase wiring, base layout, `/intent` context + `/impeccable init`, scripts) | — |
-| 1 | Data model + Prisma migrations + seed (incl. dependencies, checklists, templates, automation-rule schema) | 0 |
+| 0 | Scaffold + design system (Next.js+TS+Prisma+Auth.js, Supabase wiring, base layout, **dark** OKLCH tokens, `/intent` context + `/impeccable init`, scripts) | — |
+| 1 | Data model + Prisma migrations + seed (incl. **start date**, dependencies, checklists, templates, automation-rule schema, workspace/project entities) | 0 |
 | 2 | Auth + permissions (login, roles, **row-level scoping helper**, admin user mgmt) | 1 |
-| 3 | Board view / Kanban core (columns, cards, status badges, derived Overdue, create/move, persisted drag-reorder) | 2 |
-| 4 | Task detail A (status, assignees, dates+calendar, priority, tags, Tiptap description, subtasks, checklists) | 3 |
+| 3 | Board view / Kanban core (columns, cards, status badges, derived Overdue, create/move, persisted drag-reorder, workspace breadcrumb + project selector) | 2 |
+| 4 | Task detail A (status, assignees, start+due dates+calendar, priority, tags, Tiptap description with AI-assisted writing prompt, subtasks, checklists) | 3 |
 | 5 | Task detail B (custom fields, attachments, comments + activity log) | 4 |
 | 6 | Task dependencies (blocking / waiting-on links, cycle prevention, board+detail UI, gate Done while blocked) | 4 |
 | 7 | Recurring tasks (config UI + inline-on-status engine + scheduled worker) | 4 |
 | 8 | Automation builder (trigger/condition/action engine + builder UI + execution worker; shares scheduled-worker infra with §7). Largest section: likely splits 8a engine / 8b builder-UI via a PARTIAL handoff | 1, 3, 7 |
-| 9 | Views + sort/filter (My Tasks, All-CEO, Today, Reviewed, Calendar, multi-sort, quick filters, saved views) | 3 |
+| 9 | Views + sort/filter (My Tasks, All-CEO, Today, Reviewed, Calendar with week/day + drag-to-date, **Add Tasks Quickly** fast-entry, multi-sort, quick filters, custom/saved views + Quick view) | 3 |
 | 10 | Templates + bulk edit (create-from-template UI; multi-select + batch mutations) | 9 |
 | 11 | Realtime + per-board chat (SSE + Postgres NOTIFY, live board, presence) | 2 |
 | 12 | Notifications + @mentions + global search | 11 |
