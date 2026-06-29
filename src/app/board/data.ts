@@ -45,23 +45,25 @@ export interface BoardData {
 
 /** The current actor's view of the board: boards-as-columns with scoped cards. */
 export async function loadBoard(): Promise<BoardData> {
-  // The visibility fragment — composed into every Task read below. Resolved once.
-  const scopeWhere = await taskWhereForCurrentUser();
-
-  const workspace = await prisma.workspace.findFirst({
-    orderBy: { createdAt: "asc" },
-    include: {
-      projects: {
-        orderBy: { order: "asc" },
-        include: {
-          boards: {
-            where: { archivedAt: null },
-            orderBy: { order: "asc" },
+  // Resolve the visibility fragment and the workspace tree in PARALLEL. Each is one DB
+  // round-trip; with the database in another region, back-to-back awaits are the main cost.
+  const [scopeWhere, workspace] = await Promise.all([
+    taskWhereForCurrentUser(),
+    prisma.workspace.findFirst({
+      orderBy: { createdAt: "asc" },
+      include: {
+        projects: {
+          orderBy: { order: "asc" },
+          include: {
+            boards: {
+              where: { archivedAt: null },
+              orderBy: { order: "asc" },
+            },
           },
         },
       },
-    },
-  });
+    }),
+  ]);
 
   if (!workspace) {
     return {
@@ -75,64 +77,74 @@ export async function loadBoard(): Promise<BoardData> {
   const project = workspace.projects[0] ?? null;
   const boards = project?.boards ?? [];
 
-  const columns: BoardColumn[] = [];
-  for (const board of boards) {
-    // SCOPED read: scope fragment AND this board's open, top-level, non-reviewed cards.
-    const tasks = await prisma.task.findMany({
-      where: {
-        AND: [
-          scopeWhere,
-          {
-            boardId: board.id,
-            parentId: null,
-            archivedAt: null,
-            status: { not: "REVIEWED" },
-          },
-        ],
-      },
-      orderBy: { order: "asc" },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        priority: true,
-        dueAt: true,
-        startAt: true,
-        order: true,
-        boardId: true,
-        assignees: { select: { id: true, name: true } },
-        _count: {
-          // Subtasks are Tasks too; the card shows only the count (detail panel lists them, §4).
-          select: { subtasks: true },
+  // ONE scoped query for every board's cards (was N sequential queries — one per board).
+  // The scope fragment is composed in, so a MEMBER still only sees their assigned cards.
+  const allTasks = boards.length
+    ? await prisma.task.findMany({
+        where: {
+          AND: [
+            scopeWhere,
+            {
+              boardId: { in: boards.map((b) => b.id) },
+              parentId: null,
+              archivedAt: null,
+              status: { not: "REVIEWED" },
+            },
+          ],
         },
-        // Incoming dependency edges (this card is `blocked`) + the blocker's status, so we
-        // can count OPEN blockers for the "blocked" indicator.
-        blockedBy: { select: { blocker: { select: { status: true } } } },
-      },
-    });
+        orderBy: { order: "asc" },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          dueAt: true,
+          startAt: true,
+          order: true,
+          boardId: true,
+          assignees: { select: { id: true, name: true } },
+          _count: {
+            // Subtasks are Tasks too; the card shows only the count (detail panel lists them, §4).
+            select: { subtasks: true },
+          },
+          // Incoming dependency edges (this card is `blocked`) + the blocker's status, so we
+          // can count OPEN blockers for the "blocked" indicator.
+          blockedBy: { select: { blocker: { select: { status: true } } } },
+        },
+      })
+    : [];
 
-    columns.push({
-      id: board.id,
-      name: board.name,
-      color: board.color,
-      order: board.order,
-      cards: tasks.map((t) => ({
-        id: t.id,
-        title: t.title,
-        status: t.status,
-        priority: t.priority,
-        dueAt: t.dueAt,
-        startAt: t.startAt,
-        order: t.order,
-        boardId: t.boardId,
-        assignees: t.assignees,
-        subtaskCount: t._count.subtasks,
-        openBlockerCount: openBlockerCount(
-          t.blockedBy.map((b) => ({ status: b.blocker.status })),
-        ),
-      })),
-    });
+  // Group the flat result back into columns by board (preserving the per-board order,
+  // since the global `order` sort keeps each board's cards ascending).
+  type TaskRow = (typeof allTasks)[number];
+  const byBoard = new Map<string, TaskRow[]>();
+  for (const t of allTasks) {
+    const arr = byBoard.get(t.boardId);
+    if (arr) arr.push(t);
+    else byBoard.set(t.boardId, [t]);
   }
+
+  const columns: BoardColumn[] = boards.map((board) => ({
+    id: board.id,
+    name: board.name,
+    color: board.color,
+    order: board.order,
+    cards: (byBoard.get(board.id) ?? []).map((t) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      dueAt: t.dueAt,
+      startAt: t.startAt,
+      order: t.order,
+      boardId: t.boardId,
+      assignees: t.assignees,
+      subtaskCount: t._count.subtasks,
+      openBlockerCount: openBlockerCount(
+        t.blockedBy.map((b) => ({ status: b.blocker.status })),
+      ),
+    })),
+  }));
 
   return {
     workspaceName: workspace.name,
