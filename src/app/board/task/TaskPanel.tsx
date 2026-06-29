@@ -34,6 +34,11 @@ import { QUICK_CHOICES } from "@/domain/dates";
 import { formatTimeEstimate } from "@/domain/taskDetail";
 import { formatInZone, dateInputValue } from "@/domain/dates";
 import { DescriptionEditor } from "./DescriptionEditor";
+import {
+  CustomFieldsSection,
+  AttachmentsSection,
+  ActivitySection,
+} from "./TaskPanelExtras";
 import type { TaskDetail, PickerData } from "./data";
 import type { Status, Priority } from "@prisma/client";
 import styles from "./panel.module.css";
@@ -112,6 +117,7 @@ export default function TaskPanel({
   picker,
   timezone,
   currentUserId,
+  isCeo,
   aiEnabled,
   onClose,
 }: {
@@ -119,6 +125,7 @@ export default function TaskPanel({
   picker: PickerData;
   timezone: string;
   currentUserId: string;
+  isCeo: boolean;
   aiEnabled: boolean;
   onClose: () => void;
 }) {
@@ -169,6 +176,16 @@ export default function TaskPanel({
           <SubtasksSection task={task} />
 
           <ChecklistsSection task={task} />
+
+          <CustomFieldsSection task={task} picker={picker} isCeo={isCeo} />
+
+          <AttachmentsSection task={task} />
+
+          <ActivitySection
+            task={task}
+            timezone={timezone}
+            currentUserId={currentUserId}
+          />
         </div>
       </aside>
     </div>

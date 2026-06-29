@@ -15,12 +15,14 @@ export default function TaskPanelClient({
   picker,
   timezone,
   currentUserId,
+  isCeo,
   aiEnabled,
 }: {
   task: TaskDetail;
   picker: PickerData;
   timezone: string;
   currentUserId: string;
+  isCeo: boolean;
   aiEnabled: boolean;
 }) {
   const router = useRouter();
@@ -30,6 +32,7 @@ export default function TaskPanelClient({
       picker={picker}
       timezone={timezone}
       currentUserId={currentUserId}
+      isCeo={isCeo}
       aiEnabled={aiEnabled}
       onClose={() => router.push("/board")}
     />

@@ -785,6 +785,358 @@
   border-color: var(--primary);
 }
 
+/* ---- Shared small bits ---- */
+.emptyHint {
+  font-size: var(--fs-sm);
+  color: var(--ink-subtle);
+  margin: 0;
+}
+
+.fieldError {
+  font-size: var(--fs-sm);
+  color: var(--danger);
+  margin: 0;
+}
+
+.linkBtn {
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  padding: 0;
+}
+
+.linkBtn:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+/* ---- Custom fields ---- */
+.cfList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2);
+}
+
+.cfRow {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 2.25rem;
+}
+
+.cfLabel {
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfValue {
+  position: relative;
+  min-width: 0;
+}
+
+.cfValueInner {
+  position: relative;
+  min-width: 0;
+}
+
+.cfInput,
+.cfSelect {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-family: inherit;
+}
+
+.cfInput:focus,
+.cfSelect:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.cfCheckbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.cfCheckbox input {
+  accent-color: var(--primary);
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Rating stars */
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.star {
+  display: inline-flex;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--border-strong);
+  cursor: pointer;
+}
+
+.star[data-on] {
+  color: var(--warning);
+}
+
+.star:hover {
+  color: var(--warning);
+}
+
+.starCount {
+  margin-left: var(--space-2);
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+}
+
+/* Slider */
+.sliderWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--primary);
+  height: 1.25rem;
+}
+
+.sliderValue {
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+/* Field definer (CEO) */
+.cfDefiner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--bg-sunken);
+}
+
+.cfOptions {
+  width: 100%;
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-family: inherit;
+  resize: vertical;
+}
+
+.cfOptions:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* ---- Attachments ---- */
+.hiddenFile {
+  display: none;
+}
+
+.disabledBox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+}
+
+.attachList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.attachItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--ink-muted);
+}
+
+.attachName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--primary-strong);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.attachName:hover {
+  text-decoration: underline;
+}
+
+.attachSize {
+  font-size: var(--fs-xs);
+  color: var(--ink-subtle);
+  flex-shrink: 0;
+}
+
+/* ---- Comments + activity feed ---- */
+.feedSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.commentActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.commentCancel {
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.commentCancel:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.feedItem {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.feedBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.feedMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.feedAuthor {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+
+.feedTime {
+  font-size: var(--fs-xs);
+  color: var(--ink-subtle);
+}
+
+.feedTools {
+  display: inline-flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.commentRendered {
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  line-height: var(--lh-normal);
+}
+
+.commentRendered :global(p) {
+  margin: 0 0 var(--space-1);
+}
+
+.commentRendered :global(p:last-child) {
+  margin-bottom: 0;
+}
+
+.activityItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: var(--space-1);
+}
+
+.activityDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--border-strong);
+  flex-shrink: 0;
+}
+
+.activityText {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+}
+
+.activityText strong {
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+}
+
 /* ---- Mobile ---- */
 @media (max-width: 640px) {
   .panel {
@@ -792,7 +1144,8 @@
     border-left: none;
   }
 
-  .field {
+  .field,
+  .cfRow {
     grid-template-columns: 6.5rem 1fr;
     gap: var(--space-2);
   }

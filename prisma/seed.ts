@@ -223,6 +223,72 @@ async function main() {
     });
   }
 
+  // --- Custom fields (example set, so the §5 editors are demoable) --------
+  // Defined on the Innovations board. Idempotent: match on (boardId, name).
+  const innovations = boards["Innovations"];
+  const fieldSeeds: {
+    name: string;
+    type:
+      | "TEXT"
+      | "NUMBER"
+      | "CHECKBOX"
+      | "DATE"
+      | "DROPDOWN"
+      | "LABELS"
+      | "RATING"
+      | "PEOPLE"
+      | "SLIDER";
+    config?: object;
+    order: number;
+  }[] = [
+    { name: "Effort (text)", type: "TEXT", order: 0 },
+    { name: "Budget (USD)", type: "NUMBER", order: 1 },
+    { name: "Client approved", type: "CHECKBOX", order: 2 },
+    { name: "Target ship", type: "DATE", order: 3 },
+    {
+      name: "Stage",
+      type: "DROPDOWN",
+      order: 4,
+      config: {
+        options: [
+          { id: "discovery", label: "Discovery" },
+          { id: "build", label: "Build" },
+          { id: "launch", label: "Launch" },
+        ],
+      },
+    },
+    {
+      name: "Channels",
+      type: "LABELS",
+      order: 5,
+      config: {
+        options: [
+          { id: "ig", label: "Instagram" },
+          { id: "tt", label: "TikTok" },
+          { id: "yt", label: "YouTube" },
+        ],
+      },
+    },
+    { name: "Confidence", type: "RATING", order: 6, config: { max: 5 } },
+    { name: "Reviewers", type: "PEOPLE", order: 7 },
+    { name: "Progress", type: "SLIDER", order: 8, config: { min: 0, max: 100 } },
+  ];
+  for (const f of fieldSeeds) {
+    const existing = await prisma.customField.findFirst({
+      where: { boardId: innovations.id, name: f.name },
+    });
+    if (existing) continue;
+    await prisma.customField.create({
+      data: {
+        boardId: innovations.id,
+        name: f.name,
+        type: f.type,
+        config: f.config ?? undefined,
+        order: f.order,
+      },
+    });
+  }
+
   const taskCount = await prisma.task.count();
   console.log(
     `Seed complete: 1 workspace, 1 project, ${boardSeeds.length} boards, ` +

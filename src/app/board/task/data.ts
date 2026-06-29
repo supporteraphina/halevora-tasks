@@ -14,7 +14,8 @@ import prisma from "@/lib/prisma";
 import { taskWhereForCurrentUser } from "@/lib/scope";
 import { taskScopeWhere } from "@/domain/scope";
 import { currentActor } from "@/lib/scope";
-import type { Status, Priority } from "@prisma/client";
+import { storageEnabled } from "@/lib/storage";
+import type { Status, Priority, CustomFieldType } from "@prisma/client";
 
 export interface DetailAssignee {
   id: string;
@@ -48,6 +49,41 @@ export interface DetailChecklist {
   items: DetailChecklistItem[];
 }
 
+/** A board's custom field plus this task's value for it. `config`/`value` are raw JSON. */
+export interface DetailCustomField {
+  fieldId: string;
+  name: string;
+  type: CustomFieldType;
+  config: unknown;
+  order: number;
+  value: unknown; // null when unset
+}
+
+export interface DetailAttachment {
+  id: string;
+  filename: string;
+  mimeType: string | null;
+  size: number | null;
+  createdAt: Date;
+  uploadedBy: string | null;
+}
+
+export interface DetailComment {
+  id: string;
+  body: unknown; // Tiptap JSON document
+  authorId: string | null;
+  authorName: string | null;
+  createdAt: Date;
+}
+
+export interface DetailActivity {
+  id: string;
+  type: string;
+  data: unknown;
+  actorName: string | null;
+  createdAt: Date;
+}
+
 export interface TaskDetail {
   id: string;
   boardId: string;
@@ -63,6 +99,11 @@ export interface TaskDetail {
   tags: DetailTag[];
   subtasks: DetailSubtask[];
   checklists: DetailChecklist[];
+  customFields: DetailCustomField[];
+  attachments: DetailAttachment[];
+  attachmentsEnabled: boolean;
+  comments: DetailComment[];
+  activity: DetailActivity[];
 }
 
 /** Everyone in the workspace — for the assignee + tag pickers. Names are not task content. */
@@ -111,10 +152,58 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetail | null>
           },
         },
       },
+      customFieldValues: {
+        select: { fieldId: true, value: true },
+      },
+      attachments: {
+        where: { commentId: null },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          filename: true,
+          mimeType: true,
+          size: true,
+          createdAt: true,
+          uploadedBy: { select: { name: true } },
+        },
+      },
+      comments: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          body: true,
+          authorId: true,
+          createdAt: true,
+          author: { select: { name: true } },
+        },
+      },
+      activity: {
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        select: {
+          id: true,
+          type: true,
+          data: true,
+          createdAt: true,
+          actor: { select: { name: true } },
+        },
+      },
     },
   });
 
   if (!task) return null;
+
+  // The board's custom field definitions (a field belongs to the board, not the task).
+  // Loaded only AFTER the task passed the scope check above, so this never leaks a
+  // hidden task's board: we already proved the actor may see this task.
+  const fields = await prisma.customField.findMany({
+    where: { boardId: task.boardId },
+    orderBy: { order: "asc" },
+    select: { id: true, name: true, type: true, config: true, order: true },
+  });
+  const valueByField = new Map(
+    task.customFieldValues.map((v) => [v.fieldId, v.value]),
+  );
 
   // Subtasks are Tasks too — scope them independently to the actor's OWN visibility,
   // composing the scope fragment with parentId = this task. A member sees a subtask only
@@ -149,6 +238,37 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetail | null>
       name: c.name,
       order: c.order,
       items: c.items,
+    })),
+    customFields: fields.map((f) => ({
+      fieldId: f.id,
+      name: f.name,
+      type: f.type,
+      config: f.config ?? null,
+      order: f.order,
+      value: valueByField.get(f.id) ?? null,
+    })),
+    attachments: task.attachments.map((a) => ({
+      id: a.id,
+      filename: a.filename,
+      mimeType: a.mimeType,
+      size: a.size,
+      createdAt: a.createdAt,
+      uploadedBy: a.uploadedBy?.name ?? null,
+    })),
+    attachmentsEnabled: storageEnabled(),
+    comments: task.comments.map((c) => ({
+      id: c.id,
+      body: c.body,
+      authorId: c.authorId,
+      authorName: c.author?.name ?? null,
+      createdAt: c.createdAt,
+    })),
+    activity: task.activity.map((a) => ({
+      id: a.id,
+      type: a.type,
+      data: a.data ?? null,
+      actorName: a.actor?.name ?? null,
+      createdAt: a.createdAt,
     })),
   };
 }

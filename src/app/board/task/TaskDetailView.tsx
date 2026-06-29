@@ -27,6 +27,7 @@ export default async function TaskDetailView({ taskId }: { taskId: string }) {
       picker={picker}
       timezone={actor.timezone}
       currentUserId={actor.userId}
+      isCeo={actor.role === "CEO"}
       aiEnabled={aiEnabled}
     />
   );
