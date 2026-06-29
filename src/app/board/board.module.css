@@ -126,6 +126,47 @@
   min-width: min-content;
 }
 
+/* ---- Loading skeleton (board/loading.tsx) ---- */
+@keyframes hv-board-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.skelDot,
+.skelLine,
+.skelCard {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--surface) 0%,
+    var(--surface-2) 50%,
+    var(--surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: hv-board-shimmer 1.2s ease-in-out infinite;
+  opacity: 0.6;
+  border-radius: var(--radius-sm);
+}
+.skelDot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.skelLine {
+  height: 0.85rem;
+}
+.skelCard {
+  height: 4.5rem;
+  border-radius: var(--radius-lg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .skelDot,
+  .skelLine,
+  .skelCard {
+    animation: none;
+  }
+}
+
 /* ---- Empty board (no columns yet) ---- */
 .emptyBoard {
   display: flex;
