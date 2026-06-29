@@ -389,6 +389,12 @@
     box-shadow var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
   animation: hv-rise-sm var(--dur-base) var(--ease-out) both;
+  /* Render-skip off-screen cards: the browser skips layout + paint for cards scrolled out
+     of view, so a column with hundreds of cards stays smooth. Every card stays in the DOM,
+     so drag-and-drop, optimistic updates, prefetch, and focus all keep working. The `auto`
+     keyword remembers each card's real rendered height to keep the scrollbar accurate. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 5.5rem;
 }
 
 /* Gentle per-card stagger within each column. */

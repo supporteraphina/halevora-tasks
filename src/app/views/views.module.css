@@ -454,6 +454,10 @@
   border-bottom: 1px solid var(--border-subtle);
   transition: background var(--dur-fast) var(--ease-out);
   animation: hv-rise-sm var(--dur-base) var(--ease-out) both;
+  /* Render-skip off-screen rows so a long list (All Tasks across boards) stays smooth.
+     Columns stay aligned because every row uses the same fixed grid template. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 2.75rem;
 }
 .rows > .rowWrap:last-child { border-bottom: none; }
 
