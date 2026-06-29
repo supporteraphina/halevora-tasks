@@ -105,6 +105,9 @@
   --shadow-md: 0 2px 8px oklch(0 0 0 / 0.38);
   --shadow-lg: 0 8px 24px oklch(0 0 0 / 0.5);
 
+  /* ---- Scrim (modal/panel backdrop) ---- */
+  --scrim: oklch(0 0 0 / 0.5);
+
   /* ---- Z-index scale (semantic) ---- */
   --z-base: 0;
   --z-dropdown: 1000;

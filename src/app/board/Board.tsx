@@ -218,14 +218,31 @@ function Card({
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
+  const router = useRouter();
   const badge = badgeFor(card, now);
   const prio = PRIORITY_META[card.priority];
+
+  // Open the detail panel. Skip if the click landed on an interactive control
+  // (the status badge button / its menu), so those keep their own behavior.
+  function openDetail(e: React.MouseEvent) {
+    if ((e.target as HTMLElement).closest("button,a,[role='listbox']")) return;
+    router.push(`/board/task/${card.id}`);
+  }
 
   return (
     <article
       className={styles.card}
       data-dragging={dragging || undefined}
       draggable
+      role="button"
+      tabIndex={0}
+      onClick={openDetail}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          router.push(`/board/task/${card.id}`);
+        }
+      }}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData("text/plain", card.id);
