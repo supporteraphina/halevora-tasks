@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect, useMemo } from "react";
+import {
+  useState,
+  useTransition,
+  useRef,
+  useEffect,
+  useMemo,
+  useOptimistic,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRealtime } from "@/components/useRealtime";
@@ -57,6 +64,109 @@ interface DragState {
   fromBoardId: string;
 }
 
+// ---------------------------------------------------------------------------
+//  Optimistic board reducer
+//
+//  Applied OVER the server `columns` prop via React 19 `useOptimistic`. Each hot
+//  interaction dispatches an action that returns a NEW columns array with the change
+//  already applied, so the UI updates the instant the user acts. The matching server
+//  action persists in the background; when `router.refresh()` lands the fresh RSC
+//  payload, `useOptimistic` discards these overlays and the real data shows through —
+//  no revert-then-reapply flash, because the refresh runs inside the same transition.
+//  If the action rejects (e.g. the Done-gate), the overlay is dropped on settle and the
+//  card snaps back to its true status; the handler surfaces the error toast.
+// ---------------------------------------------------------------------------
+
+type OptimisticAction =
+  | { type: "status"; taskId: string; status: Status }
+  | { type: "move"; taskId: string; toBoardId: string; index: number }
+  | { type: "create"; boardId: string; card: BoardCard };
+
+/**
+ * Apply one optimistic action to the columns. Pure: returns a fresh array, never mutates.
+ * Mirrors the server's observable effect closely enough to look right until the refresh
+ * reconciles — it is presentation only and trusts nothing the server wouldn't re-check.
+ */
+function applyOptimisticAction(
+  cols: BoardColumn[],
+  action: OptimisticAction,
+): BoardColumn[] {
+  switch (action.type) {
+    case "status": {
+      // A card set to REVIEWED leaves the board grid (mirrors the loader's filter).
+      const leaves = action.status === "REVIEWED";
+      return cols.map((col) => {
+        if (!col.cards.some((c) => c.id === action.taskId)) return col;
+        const cards = leaves
+          ? col.cards.filter((c) => c.id !== action.taskId)
+          : col.cards.map((c) =>
+              c.id === action.taskId ? { ...c, status: action.status } : c,
+            );
+        return { ...col, cards };
+      });
+    }
+    case "move": {
+      // Pull the card out of whatever column holds it, then insert at `index` in the dest.
+      let moved: BoardCard | undefined;
+      const without = cols.map((col) => {
+        const found = col.cards.find((c) => c.id === action.taskId);
+        if (found) moved = found;
+        return found
+          ? { ...col, cards: col.cards.filter((c) => c.id !== action.taskId) }
+          : col;
+      });
+      if (!moved) return cols;
+      const card = moved;
+      return without.map((col) => {
+        if (col.id !== action.toBoardId) return col;
+        // Give the card a fractional order between its new neighbours so the sort is stable.
+        const neighbours = col.cards;
+        const i = Math.max(0, Math.min(action.index, neighbours.length));
+        const before = neighbours[i - 1]?.order;
+        const afterCard = neighbours[i]?.order;
+        let order: number;
+        if (neighbours.length === 0) order = 1000;
+        else if (i === 0) order = (afterCard ?? 1000) / 2;
+        else if (i >= neighbours.length) order = (before ?? 0) + 1000;
+        else order = ((before ?? 0) + (afterCard ?? 0)) / 2;
+        const placed: BoardCard = { ...card, boardId: action.toBoardId, order };
+        const next = [...neighbours];
+        next.splice(i, 0, placed);
+        return { ...col, cards: next };
+      });
+    }
+    case "create": {
+      return cols.map((col) =>
+        col.id === action.boardId
+          ? { ...col, cards: [...col.cards, action.card] }
+          : col,
+      );
+    }
+    default:
+      return cols;
+  }
+}
+
+/** A unique-enough temp id for an optimistic new card; replaced by the real row on refresh. */
+let tempSeq = 0;
+function makeTempCard(boardId: string, title: string): BoardCard {
+  tempSeq += 1;
+  return {
+    id: `temp-${Date.now()}-${tempSeq}`,
+    title,
+    status: "TODO",
+    priority: "NORMAL",
+    dueAt: null,
+    startAt: null,
+    // Sort to the end of the column, matching the server's append-order.
+    order: Number.MAX_SAFE_INTEGER,
+    boardId,
+    assignees: [],
+    subtaskCount: 0,
+    openBlockerCount: 0,
+  };
+}
+
 export default function Board({
   columns,
   isCeo,
@@ -70,6 +180,13 @@ export default function Board({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // Optimistic overlay on the server columns. Dispatches MUST run inside a transition
+  // (they do — every handler wraps them in `startTransition`). The overlay is discarded
+  // automatically when the transition settles and the refreshed RSC payload arrives.
+  const [optimisticColumns, applyOptimistic] = useOptimistic(
+    columns,
+    applyOptimisticAction,
+  );
   const [drag, setDrag] = useState<DragState | null>(null);
   // Transient error surfaced when a move/reorder is rejected server-side.
   const [moveError, setMoveError] = useState<string | null>(null);
@@ -134,9 +251,53 @@ export default function Board({
     fd.set("toBoardId", toBoardId);
     fd.set("index", String(index));
     startTransition(async () => {
-      const result = await moveCardAction({}, fd);
+      applyOptimistic({ type: "move", taskId, toBoardId, index }); // instant
+      const result = await moveCardAction({}, fd); // persist in background
       if (result?.error) setMoveError(result.error);
-      router.refresh();
+      router.refresh(); // reconcile inside the same transition (no flash)
+    });
+  }
+
+  // Lifted status-change handler: the optimistic dispatch lives here so it shares the
+  // transition with the action + refresh. Returns the action's error (if any) to the
+  // badge, which owns the local error toast.
+  function runStatusChange(
+    taskId: string,
+    status: Status,
+  ): Promise<string | null> {
+    const fd = new FormData();
+    fd.set("taskId", taskId);
+    fd.set("status", status);
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        applyOptimistic({ type: "status", taskId, status }); // instant
+        const result = await changeStatusAction({}, fd); // persist
+        router.refresh(); // reconcile (reverts the overlay if the action refused)
+        resolve(result?.error ?? null);
+      });
+    });
+  }
+
+  // Lifted create-task handler: drops a temp card into the column immediately; the refresh
+  // brings the real row and the temp overlay falls away.
+  function runCreateTask(
+    boardId: string,
+    title: string,
+  ): Promise<string | null> {
+    const fd = new FormData();
+    fd.set("boardId", boardId);
+    fd.set("title", title);
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        applyOptimistic({
+          type: "create",
+          boardId,
+          card: makeTempCard(boardId, title),
+        });
+        const result = await createTaskAction({}, fd);
+        router.refresh();
+        resolve(result?.error ?? null);
+      });
     });
   }
 
@@ -147,10 +308,16 @@ export default function Board({
     return () => clearTimeout(t);
   }, [moveError]);
 
-  // Targets for the keyboard "Move to…" menu: top/bottom of each board column.
+  // Targets for the keyboard "Move to…" menu: top/bottom of each board column. Derived from
+  // the OPTIMISTIC columns so a "bottom" index reflects what the user currently sees.
   const moveBoards = useMemo(
-    () => columns.map((c) => ({ id: c.id, name: c.name, cardCount: c.cards.length })),
-    [columns],
+    () =>
+      optimisticColumns.map((c) => ({
+        id: c.id,
+        name: c.name,
+        cardCount: c.cards.length,
+      })),
+    [optimisticColumns],
   );
 
   function onDrop(boardId: string, index: number) {
@@ -167,11 +334,11 @@ export default function Board({
 
   return (
     <div className={styles.boardScroll} data-pending={pending || undefined}>
-      {columns.length === 0 ? (
+      {optimisticColumns.length === 0 ? (
         <EmptyBoard />
       ) : (
         <div className={styles.columns}>
-          {columns.map((col) => (
+          {optimisticColumns.map((col) => (
             <Column
               key={col.id}
               column={col}
@@ -184,6 +351,8 @@ export default function Board({
               onToggleSelect={toggleSelect}
               moveBoards={moveBoards}
               onMoveTo={moveCardTo}
+              onChangeStatus={runStatusChange}
+              onCreateTask={runCreateTask}
               onDragStart={(taskId) =>
                 setDrag({ taskId, fromBoardId: col.id })
               }
@@ -358,6 +527,8 @@ function Column({
   onToggleSelect,
   moveBoards,
   onMoveTo,
+  onChangeStatus,
+  onCreateTask,
   onDragStart,
   onDragEnd,
   onDrop,
@@ -372,6 +543,8 @@ function Column({
   onToggleSelect: (id: string) => void;
   moveBoards: MoveBoard[];
   onMoveTo: (taskId: string, fromBoardId: string, toBoardId: string, index: number) => void;
+  onChangeStatus: (taskId: string, status: Status) => Promise<string | null>;
+  onCreateTask: (boardId: string, title: string) => Promise<string | null>;
   onDragStart: (taskId: string) => void;
   onDragEnd: () => void;
   onDrop: (boardId: string, index: number) => void;
@@ -460,6 +633,7 @@ function Column({
               moveBoards={moveBoards}
               fromBoardId={column.id}
               onMoveTo={onMoveTo}
+              onChangeStatus={onChangeStatus}
               onDragStart={() => onDragStart(card.id)}
               onDragEnd={onDragEnd}
             />
@@ -470,7 +644,7 @@ function Column({
         ) : null}
       </div>
 
-      <AddTask boardId={column.id} />
+      <AddTask boardId={column.id} onCreateTask={onCreateTask} />
     </section>
   );
 }
@@ -484,6 +658,7 @@ function Card({
   moveBoards,
   fromBoardId,
   onMoveTo,
+  onChangeStatus,
   onDragStart,
   onDragEnd,
 }: {
@@ -495,16 +670,21 @@ function Card({
   moveBoards: MoveBoard[];
   fromBoardId: string;
   onMoveTo: (taskId: string, fromBoardId: string, toBoardId: string, index: number) => void;
+  onChangeStatus: (taskId: string, status: Status) => Promise<string | null>;
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
   const router = useRouter();
   const badge = badgeFor(card, now);
   const prio = PRIORITY_META[card.priority];
+  // A just-created optimistic card has no real row yet — don't let it navigate, drag, or
+  // change status until the refresh swaps in the real id.
+  const isTemp = card.id.startsWith("temp-");
 
   // Open the detail panel. Skip if the click landed on an interactive control
   // (the status badge button / its menu / the select checkbox), so those keep their behavior.
   function openDetail(e: React.MouseEvent) {
+    if (isTemp) return;
     if ((e.target as HTMLElement).closest("button,a,input,label,[role='listbox'],[role='menu']")) return;
     router.push(`/board/task/${card.id}`);
   }
@@ -514,17 +694,23 @@ function Card({
       className={styles.card}
       data-dragging={dragging || undefined}
       data-selected={selected || undefined}
-      draggable
+      data-temp={isTemp || undefined}
+      aria-busy={isTemp || undefined}
+      draggable={!isTemp}
       role="button"
       tabIndex={0}
       onClick={openDetail}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          router.push(`/board/task/${card.id}`);
+          if (!isTemp) router.push(`/board/task/${card.id}`);
         }
       }}
       onDragStart={(e) => {
+        if (isTemp) {
+          e.preventDefault();
+          return;
+        }
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData("text/plain", card.id);
         onDragStart();
@@ -556,7 +742,13 @@ function Card({
       </div>
 
       <div className={styles.cardMeta}>
-        <StatusBadge taskId={card.id} badgeKey={badge.key} label={badge.label} />
+        <StatusBadge
+          taskId={card.id}
+          badgeKey={badge.key}
+          label={badge.label}
+          disabled={isTemp}
+          onChangeStatus={onChangeStatus}
+        />
 
         {card.openBlockerCount > 0 ? (
           <span
@@ -765,14 +957,19 @@ function StatusBadge({
   taskId,
   badgeKey,
   label,
+  disabled,
+  onChangeStatus,
 }: {
   taskId: string;
   badgeKey: BadgeKey;
   label: string;
+  disabled?: boolean;
+  onChangeStatus: (taskId: string, status: Status) => Promise<string | null>;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
+  // `busy` only disables the trigger while the parent transition runs; the optimistic
+  // overlay + refresh both live in the lifted `onChangeStatus`, so the badge updates instantly.
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const tone = BADGE_VARS[badgeKey];
@@ -803,15 +1000,15 @@ function StatusBadge({
   function choose(status: Status) {
     setOpen(false);
     setError(null);
-    const fd = new FormData();
-    fd.set("taskId", taskId);
-    fd.set("status", status);
-    startTransition(async () => {
-      // The server enforces the Done-gate; surface its message if it refuses.
-      const result = await changeStatusAction({}, fd);
-      if (result?.error) setError(result.error);
-      router.refresh();
-    });
+    setBusy(true);
+    // The parent applies the optimistic status (instant badge update), persists, and
+    // refreshes; it resolves the Done-gate error (if any). On refusal the overlay reverts
+    // to the truth and we surface the message in the existing toast.
+    onChangeStatus(taskId, status)
+      .then((err) => {
+        if (err) setError(err);
+      })
+      .finally(() => setBusy(false));
   }
 
   return (
@@ -822,7 +1019,7 @@ function StatusBadge({
         data-tone={tone}
         aria-haspopup="listbox"
         aria-expanded={open}
-        disabled={pending}
+        disabled={disabled || busy}
         // Prevent the parent card's drag from hijacking a click on the badge.
         draggable={false}
         onMouseDown={(e) => e.stopPropagation()}
@@ -881,16 +1078,27 @@ function StatusOptionLabel({ status }: { status: Status }) {
   return <span>{map[status]}</span>;
 }
 
-function AddTask({ boardId }: { boardId: string }) {
-  const router = useRouter();
+function AddTask({
+  boardId,
+  onCreateTask,
+}: {
+  boardId: string;
+  onCreateTask: (boardId: string, title: string) => Promise<string | null>;
+}) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 4000);
+    return () => clearTimeout(t);
+  }, [error]);
 
   function submit() {
     const value = title.trim();
@@ -898,15 +1106,14 @@ function AddTask({ boardId }: { boardId: string }) {
       setOpen(false);
       return;
     }
-    const fd = new FormData();
-    fd.set("boardId", boardId);
-    fd.set("title", value);
-    startTransition(async () => {
-      await createTaskAction({}, fd);
-      setTitle("");
-      router.refresh();
-      // Keep the composer open for fast multi-entry.
-      inputRef.current?.focus();
+    // Optimistic: the temp card appears the instant we dispatch (inside onCreateTask).
+    // Clear the field and keep the composer open right away for fast multi-entry — the
+    // background persist + refresh swaps the temp card for the real row.
+    setTitle("");
+    setError(null);
+    inputRef.current?.focus();
+    onCreateTask(boardId, value).then((err) => {
+      if (err) setError(err);
     });
   }
 
@@ -929,7 +1136,6 @@ function AddTask({ boardId }: { boardId: string }) {
         className={styles.composerInput}
         value={title}
         placeholder="Task name"
-        disabled={pending}
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
@@ -944,15 +1150,19 @@ function AddTask({ boardId }: { boardId: string }) {
           if (title.trim().length === 0) setOpen(false);
         }}
       />
+      {error ? (
+        <p className={styles.composerError} role="alert">
+          {error}
+        </p>
+      ) : null}
       <div className={styles.composerActions}>
         <button
           type="button"
           className={styles.composerSave}
-          disabled={pending}
           onMouseDown={(e) => e.preventDefault()}
           onClick={submit}
         >
-          {pending ? "Adding…" : "Save"}
+          Save
         </button>
         <button
           type="button"
