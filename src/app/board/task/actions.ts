@@ -26,6 +26,13 @@ import { isClosed } from "@/domain/status";
 import { nextOccurrence } from "@/domain/recurrence";
 import { recordActivity } from "@/lib/activity";
 import { maybeRecurOnStatusChange } from "@/lib/recurrenceTrigger";
+import {
+  onStatusChanged,
+  onPriorityChanged,
+  onAssigneeChanged,
+  onDueChanged,
+  onTagAdded,
+} from "@/lib/automationTrigger";
 
 const CADENCES: Cadence[] = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY", "CUSTOM"];
 const TRIGGERS: RecurrenceTrigger[] = ["ON_STATUS_CHANGE", "ON_SCHEDULE"];
@@ -138,6 +145,14 @@ export async function setStatusAction(
       actorId: actor.userId,
       timeZone: actor.timezone,
     });
+    // Automation: fire status_changed rules (best-effort; system writes).
+    await onStatusChanged({
+      boardId: task.boardId,
+      taskId: task.id,
+      actorId: actor.userId,
+      from: task.status,
+      to: status,
+    });
   }
   revalidateTask(task.id);
   return { ok: true };
@@ -165,6 +180,14 @@ export async function setPriorityAction(
       actorId: actor.userId,
       type: "priority_changed",
       data: { from: task.priority, to: priority },
+    });
+    // Automation: fire priority_changed rules (best-effort; system writes).
+    await onPriorityChanged({
+      boardId: task.boardId,
+      taskId: task.id,
+      actorId: actor.userId,
+      from: task.priority,
+      to: priority,
     });
   }
   revalidateTask(task.id);
@@ -214,6 +237,13 @@ export async function toggleAssigneeAction(
     actorId: actor.userId,
     type: op === "add" ? "assignee_added" : "assignee_removed",
     data: { name: user.name },
+  });
+  // Automation: fire assignee_changed rules (best-effort; system writes).
+  await onAssigneeChanged({
+    boardId: task.boardId,
+    taskId: task.id,
+    actorId: actor.userId,
+    userId,
   });
   revalidateTask(task.id);
   return { ok: true };
@@ -267,6 +297,14 @@ export async function setDateAction(
     type: field === "start" ? "start_changed" : "due_changed",
     data: { to: value ? formatInZone(value, actor.timezone) : null },
   });
+  // Automation: fire due_changed rules when the DUE date moved (best-effort; system writes).
+  if (field === "due") {
+    await onDueChanged({
+      boardId: task.boardId,
+      taskId: task.id,
+      actorId: actor.userId,
+    });
+  }
   revalidateTask(task.id);
   return { ok: true };
 }
@@ -308,7 +346,7 @@ export async function toggleTagAction(
   if (!tagId) return { error: "Missing tag." };
   if (op !== "add" && op !== "remove") return { error: "Bad operation." };
 
-  const { task } = await findVisibleTask(taskId);
+  const { actor, task } = await findVisibleTask(taskId);
   if (!task) return { error: "Task not found." };
 
   await prisma.task.update({
@@ -318,6 +356,21 @@ export async function toggleTagAction(
         op === "add" ? { connect: { id: tagId } } : { disconnect: { id: tagId } },
     },
   });
+  // Automation: fire tag_added rules when a tag was connected (best-effort; system writes).
+  if (op === "add") {
+    const tag = await prisma.tag.findUnique({
+      where: { id: tagId },
+      select: { name: true },
+    });
+    if (tag) {
+      await onTagAdded({
+        boardId: task.boardId,
+        taskId: task.id,
+        actorId: actor.userId,
+        tagName: tag.name,
+      });
+    }
+  }
   revalidateTask(task.id);
   return { ok: true };
 }
@@ -333,7 +386,7 @@ export async function createTagAction(
   if (name.length === 0) return { error: "Tag name is required." };
   if (name.length > 50) return { error: "Tag name is too long." };
 
-  const { task } = await findVisibleTask(taskId);
+  const { actor, task } = await findVisibleTask(taskId);
   if (!task) return { error: "Task not found." };
 
   // Upsert by unique name so we never create duplicates, then connect.
@@ -346,6 +399,13 @@ export async function createTagAction(
   await prisma.task.update({
     where: { id: task.id },
     data: { tags: { connect: { id: tag.id } } },
+  });
+  // Automation: fire tag_added rules for the newly connected tag (best-effort; system writes).
+  await onTagAdded({
+    boardId: task.boardId,
+    taskId: task.id,
+    actorId: actor.userId,
+    tagName: name,
   });
   revalidateTask(task.id);
   return { ok: true };

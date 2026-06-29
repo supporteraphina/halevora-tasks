@@ -369,6 +369,7 @@ model AutomationRule {
   conditions  Json     @default("[]") // array of condition clauses
   actions     Json     @default("[]") // ordered array of actions
   order       Float    @default(0)
+  nextRunAt   DateTime? // for the `scheduled` trigger: the worker fires the rule when this is due
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -378,6 +379,7 @@ model AutomationRule {
   runs      AutomationRunLog[]
 
   @@index([boardId])
+  @@index([nextRunAt])
 }
 
 /// Append-only execution audit for automation rules.

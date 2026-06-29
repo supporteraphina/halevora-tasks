@@ -8,7 +8,7 @@
  *
  * Safe to re-run: every entity is upserted on a stable natural key.
  */
-import { PrismaClient, Priority, Status } from "@prisma/client";
+import { Prisma, PrismaClient, Priority, Status } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -289,10 +289,61 @@ async function main() {
     });
   }
 
+  // --- Automation rules (example set, so the §8a engine is demoable) ------
+  // Defined on the Innovations board. Idempotent: match on (boardId, name). These exercise
+  // two trigger kinds (status + priority) and two action kinds (add_tag + post_comment),
+  // and are runnable from the existing board/detail UI without the 8b builder.
+  const automationSeeds: {
+    name: string;
+    order: number;
+    trigger: Prisma.InputJsonValue;
+    conditions: Prisma.InputJsonValue;
+    actions: Prisma.InputJsonValue;
+  }[] = [
+    {
+      name: "When status → Done, add tag \"shipped\"",
+      order: 0,
+      trigger: { type: "status_changed", config: { to: "DONE" } },
+      conditions: [],
+      actions: [{ type: "add_tag", tag: "shipped" }],
+    },
+    {
+      name: "When priority → Urgent, post a comment",
+      order: 1,
+      trigger: { type: "priority_changed", config: { to: "URGENT" } },
+      conditions: [],
+      actions: [
+        {
+          type: "post_comment",
+          text: "Flagged URGENT by automation — please prioritize.",
+        },
+      ],
+    },
+  ];
+  for (const a of automationSeeds) {
+    const existing = await prisma.automationRule.findFirst({
+      where: { boardId: innovations.id, name: a.name },
+    });
+    if (existing) continue;
+    await prisma.automationRule.create({
+      data: {
+        boardId: innovations.id,
+        name: a.name,
+        enabled: true,
+        order: a.order,
+        trigger: a.trigger,
+        conditions: a.conditions,
+        actions: a.actions,
+        createdById: noel.id,
+      },
+    });
+  }
+
   const taskCount = await prisma.task.count();
+  const automationCount = await prisma.automationRule.count();
   console.log(
     `Seed complete: 1 workspace, 1 project, ${boardSeeds.length} boards, ` +
-      `${1 + members.length} users, ${taskCount} tasks.`,
+      `${1 + members.length} users, ${taskCount} tasks, ${automationCount} automation rules.`,
   );
 }
 

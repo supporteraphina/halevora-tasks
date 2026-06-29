@@ -27,6 +27,7 @@ export const ACTIVITY_TYPES = [
   "dependency_removed",
   "recurrence_spawned",
   "recurrence_closed",
+  "automation_ran",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
@@ -121,6 +122,13 @@ export function describeActivity(type: string, data: unknown): string {
     case "recurrence_closed":
       // Recorded on the NEW instance: it was spawned from a recurring task.
       return "was created from a recurring task";
+    case "automation_ran": {
+      // Recorded when an automation rule applied changes to the task.
+      const ruleName = str(d.rule);
+      return ruleName
+        ? `ran the automation "${ruleName}"`
+        : "ran an automation";
+    }
     default:
       return "made a change";
   }

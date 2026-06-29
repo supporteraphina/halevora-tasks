@@ -7,6 +7,7 @@ import { taskScopeWhere } from "@/domain/scope";
 import { STATUSES, isClosed, type Status } from "@/domain/status";
 import { openBlockerCount } from "@/domain/dependencies";
 import { maybeRecurOnStatusChange } from "@/lib/recurrenceTrigger";
+import { onStatusChanged } from "@/lib/automationTrigger";
 import {
   appendOrder,
   orderForMove,
@@ -125,6 +126,14 @@ export async function changeStatusAction(
       newStatus: status,
       actorId: actor.userId,
       timeZone: actor.timezone,
+    });
+    // Automation: fire status_changed rules for this board (best-effort; system writes).
+    await onStatusChanged({
+      boardId: task.boardId,
+      taskId: task.id,
+      actorId: actor.userId,
+      from: task.status,
+      to: status,
     });
   }
   revalidatePath(BOARD_PATH);

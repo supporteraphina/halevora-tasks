@@ -22,6 +22,7 @@ describe("ACTIVITY_TYPES", () => {
       "dependency_removed",
       "recurrence_spawned",
       "recurrence_closed",
+      "automation_ran",
     ];
     for (const t of expected) expect(ACTIVITY_TYPES).toContain(t);
   });
@@ -102,6 +103,13 @@ describe("describeActivity", () => {
     expect(describeActivity("recurrence_closed", {})).toBe(
       "was created from a recurring task",
     );
+  });
+
+  it("renders an automation run with and without a rule name", () => {
+    expect(
+      describeActivity("automation_ran", { rule: "On done, tag shipped" }),
+    ).toBe('ran the automation "On done, tag shipped"');
+    expect(describeActivity("automation_ran", {})).toBe("ran an automation");
   });
 
   it("falls back to a readable label for an unknown payload", () => {
