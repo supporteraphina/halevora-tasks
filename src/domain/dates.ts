@@ -187,6 +187,15 @@ export function dateInputValue(instant: Date, timeZone: string): string {
 }
 
 /**
+ * True when two UTC instants fall on the SAME calendar day in `timeZone`. Used by the
+ * "Today" view to bucket a task's due date against the actor's local "now" — never compared
+ * in server-UTC (a task due late evening local could otherwise land on the wrong day).
+ */
+export function isSameDayInZone(a: Date, b: Date, timeZone: string): boolean {
+  return dateInputValue(a, timeZone) === dateInputValue(b, timeZone);
+}
+
+/**
  * Parse a YYYY-MM-DD (from a date input) as midnight of that day in `timeZone`,
  * returning the UTC instant. Returns null for empty/malformed/out-of-range input.
  */

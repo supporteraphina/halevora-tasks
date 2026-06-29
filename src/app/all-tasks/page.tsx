@@ -6,48 +6,46 @@ import { loadSavedViews, loadSavedView } from "@/app/views/savedViews";
 import ListView from "@/app/views/ListView";
 
 export const metadata: Metadata = {
-  title: "My Tasks — Halevora Tasks",
+  title: "All Tasks — Halevora Tasks",
 };
 
-// Mutations elsewhere revalidate these paths; always reflect the latest.
 export const dynamic = "force-dynamic";
 
-export default async function MyTasksPage({
+export default async function AllTasksPage({
   searchParams,
 }: {
   searchParams: Promise<{ view?: string }>;
 }) {
+  // Server-side role gate. CEO only — a MEMBER is redirected, never shown every task.
+  // (Same gate idiom as src/app/board/automation/[boardId]/page.tsx:24.)
   const actor = await currentActor();
   if (!actor) redirect("/login");
+  if (actor.role !== "CEO") redirect("/my-tasks");
 
-  // SCOPED read: loadScopedTasks composes taskWhereForCurrentUser() — a MEMBER sees only
-  // their assigned tasks; a CEO sees all (here "My Tasks" = tasks assigned to ME — see below).
+  // SCOPED read: loadScopedTasks still composes taskWhereForCurrentUser(); for a CEO the
+  // scope fragment is {} (all tasks), so the page shows every board's tasks. A MEMBER never
+  // reaches this read — they were redirected above.
   const [tasks, options, savedViews] = await Promise.all([
     loadScopedTasks(),
     loadFilterOptions(),
     loadSavedViews(),
   ]);
 
-  // "My Tasks" means assigned to ME, even for a CEO (who otherwise sees everything). We narrow
-  // the already-scoped set to tasks the actor is on. For a MEMBER this is a no-op (the scope
-  // fragment already did it); for a CEO it distinguishes My Tasks from All Tasks.
-  const mine = tasks.filter((t) => t.assigneeIds.includes(actor.userId));
-
   const { view: viewId } = await searchParams;
   const activeView = viewId ? await loadSavedView(viewId) : null;
 
   return (
     <ListView
-      title="My Tasks"
-      subtitle="Tasks assigned to you, across every board."
-      kind="my_tasks"
-      tasks={mine}
+      title="All Tasks (CEO View)"
+      subtitle="Every task across all boards."
+      kind="all"
+      tasks={tasks}
       timezone={actor.timezone}
       options={options}
       savedViews={savedViews}
       activeView={activeView}
       groupByBoard
-      canSaveAll={actor.role === "CEO"}
+      canSaveAll
     />
   );
 }

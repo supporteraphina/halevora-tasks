@@ -5,9 +5,22 @@ import { usePathname } from "next/navigation";
 import styles from "./AppShell.module.css";
 import UserMenu from "./UserMenu";
 
-const TABS = [
+interface Tab {
+  href: string;
+  label: string;
+  ceoOnly?: boolean;
+}
+
+// Order mirrors the ClickUp tab row in the source screenshots. "All Tasks (CEO View)" is
+// CEO-only here and is also server-gated on its page — hiding the tab is just UX, not the
+// security boundary.
+const TABS: Tab[] = [
   { href: "/board", label: "Board" },
   { href: "/my-tasks", label: "My Tasks" },
+  { href: "/add-tasks", label: "Add Tasks Quickly" },
+  { href: "/all-tasks", label: "All Tasks (CEO View)", ceoOnly: true },
+  { href: "/today", label: "All Tasks TODAY" },
+  { href: "/reviewed", label: "Reviewed" },
   { href: "/calendar", label: "Calendar" },
   { href: "/chat", label: "Chat" },
 ];
@@ -40,7 +53,7 @@ export default function AppShell({
           <span className={styles.wordmark}>Halevora Tasks</span>
         </div>
         <nav className={styles.tabs} aria-label="Primary">
-          {TABS.map((tab) => {
+          {TABS.filter((tab) => !tab.ceoOnly || user?.role === "CEO").map((tab) => {
             const active =
               pathname === tab.href || pathname.startsWith(`${tab.href}/`);
             return (

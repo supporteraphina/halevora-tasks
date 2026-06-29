@@ -5,6 +5,7 @@ import {
   formatInZone,
   dateInputValue,
   parseDateInput,
+  isSameDayInZone,
   type QuickChoice,
 } from "./dates";
 
@@ -144,5 +145,27 @@ describe("dateInputValue / parseDateInput round-trip", () => {
     expect(parseDateInput("", "UTC")).toBeNull();
     expect(parseDateInput("not-a-date", "UTC")).toBeNull();
     expect(parseDateInput("2026-13-40", "UTC")).toBeNull();
+  });
+});
+
+describe("isSameDayInZone — Today bucketing in the actor's timezone", () => {
+  it("two instants on the same local day match", () => {
+    const a = new Date("2026-06-29T08:00:00Z");
+    const b = new Date("2026-06-29T20:00:00Z");
+    expect(isSameDayInZone(a, b, "UTC")).toBe(true);
+  });
+
+  it("differs across midnight in UTC", () => {
+    const a = new Date("2026-06-29T23:00:00Z");
+    const b = new Date("2026-06-30T01:00:00Z");
+    expect(isSameDayInZone(a, b, "UTC")).toBe(false);
+  });
+
+  it("respects the zone: a late-evening local due lands on the local day, not UTC's", () => {
+    // 2026-06-29T22:00Z is already 2026-06-30 01:00 in Asia/Jerusalem (+3 summer).
+    const due = new Date("2026-06-29T22:00:00Z");
+    const now = new Date("2026-06-30T06:00:00Z"); // 09:00 local on Jun 30
+    expect(isSameDayInZone(due, now, "Asia/Jerusalem")).toBe(true);
+    expect(isSameDayInZone(due, now, "UTC")).toBe(false);
   });
 });

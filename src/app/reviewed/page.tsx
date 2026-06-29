@@ -6,13 +6,12 @@ import { loadSavedViews, loadSavedView } from "@/app/views/savedViews";
 import ListView from "@/app/views/ListView";
 
 export const metadata: Metadata = {
-  title: "My Tasks — Halevora Tasks",
+  title: "Reviewed — Halevora Tasks",
 };
 
-// Mutations elsewhere revalidate these paths; always reflect the latest.
 export const dynamic = "force-dynamic";
 
-export default async function MyTasksPage({
+export default async function ReviewedPage({
   searchParams,
 }: {
   searchParams: Promise<{ view?: string }>;
@@ -20,28 +19,23 @@ export default async function MyTasksPage({
   const actor = await currentActor();
   if (!actor) redirect("/login");
 
-  // SCOPED read: loadScopedTasks composes taskWhereForCurrentUser() — a MEMBER sees only
-  // their assigned tasks; a CEO sees all (here "My Tasks" = tasks assigned to ME — see below).
+  // SCOPED read: loadScopedTasks composes taskWhereForCurrentUser(); onlyReviewed narrows to
+  // the REVIEWED tasks that leave the board grid. A MEMBER still sees only their own.
   const [tasks, options, savedViews] = await Promise.all([
-    loadScopedTasks(),
+    loadScopedTasks({ onlyReviewed: true }),
     loadFilterOptions(),
     loadSavedViews(),
   ]);
-
-  // "My Tasks" means assigned to ME, even for a CEO (who otherwise sees everything). We narrow
-  // the already-scoped set to tasks the actor is on. For a MEMBER this is a no-op (the scope
-  // fragment already did it); for a CEO it distinguishes My Tasks from All Tasks.
-  const mine = tasks.filter((t) => t.assigneeIds.includes(actor.userId));
 
   const { view: viewId } = await searchParams;
   const activeView = viewId ? await loadSavedView(viewId) : null;
 
   return (
     <ListView
-      title="My Tasks"
-      subtitle="Tasks assigned to you, across every board."
-      kind="my_tasks"
-      tasks={mine}
+      title="Reviewed"
+      subtitle="Tasks marked Reviewed have left the board and live here."
+      kind="reviewed"
+      tasks={tasks}
       timezone={actor.timezone}
       options={options}
       savedViews={savedViews}

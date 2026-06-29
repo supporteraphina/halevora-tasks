@@ -99,6 +99,7 @@ model User {
   templates          TaskTemplate[]
   automationRules    AutomationRule[]
   customFieldPeople  CustomFieldValue[] @relation("CustomFieldPeople")
+  savedViews         SavedView[]
 
   @@index([role])
 }
@@ -422,6 +423,30 @@ model RecurrenceRule {
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([nextRunAt])
+}
+
+// ---------------------------------------------------------------------------
+// Saved / custom views
+// ---------------------------------------------------------------------------
+
+/// A user's saved view: a named sort+filter config over a base scope. Owner-scoped — a
+/// saved view is private to the user who created it (it carries no cross-user visibility;
+/// the underlying task reads still compose `taskWhereForCurrentUser()`, so a member's saved
+/// view can never surface a task they aren't assigned to). `kind` selects the base task set
+/// the config refines (e.g. "my_tasks", "all" (CEO-only), "today", "reviewed", "calendar").
+model SavedView {
+  id        String   @id @default(cuid())
+  ownerId   String
+  name      String
+  kind      String   @default("my_tasks")
+  config    Json     @default("{}") // { filter, sort } — parsed defensively (src/domain/views.ts)
+  order     Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
 }
 
 // ---------------------------------------------------------------------------
