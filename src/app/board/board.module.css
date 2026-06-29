@@ -33,6 +33,22 @@
   color: var(--ink-subtle);
 }
 
+.templatesLink {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  text-decoration: none;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+.templatesLink:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
 .body {
   display: flex;
   min-height: 0;
@@ -223,12 +239,40 @@
   cursor: grabbing;
 }
 
+.card[data-selected] {
+  border-color: var(--primary);
+  background: var(--primary-weak);
+}
+
+/* Title row with a leading select checkbox. */
+.cardTop {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.cardSelect {
+  display: inline-flex;
+  align-items: center;
+  padding-top: 1px;
+  cursor: pointer;
+}
+
+.cardCheckbox {
+  width: 0.95rem;
+  height: 0.95rem;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
 .cardTitle {
   font-size: var(--fs-base);
   color: var(--ink);
   line-height: var(--lh-snug);
   margin: 0;
   max-width: none;
+  flex: 1;
+  min-width: 0;
 }
 
 .cardMeta {

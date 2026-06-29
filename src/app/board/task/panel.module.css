@@ -81,6 +81,90 @@
   color: var(--ink);
 }
 
+/* ---- Header actions (Save as template) ---- */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.headerMenuWrap {
+  position: relative;
+}
+
+.headerBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 1.875rem;
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.headerBtn:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--border-strong);
+}
+
+.headerMenu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 20;
+  min-width: 16rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.headerMenuTitle {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--ink);
+  margin: 0;
+}
+
+.headerMenuInput {
+  width: 100%;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  font-size: var(--fs-sm);
+}
+.headerMenuInput:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.headerMenuError {
+  font-size: var(--fs-sm);
+  color: var(--danger);
+  margin: 0;
+}
+
+.headerMenuDone {
+  font-size: var(--fs-sm);
+  color: var(--success);
+  margin: 0;
+}
+
+.headerMenuActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .scroll {
   flex: 1;
   overflow-y: auto;

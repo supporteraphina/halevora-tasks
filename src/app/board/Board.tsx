@@ -15,6 +15,10 @@ import {
 } from "@/domain/statusGroups";
 import type { Status, Priority } from "@prisma/client";
 import type { BoardColumn, BoardCard } from "./data";
+import BulkToolbar, {
+  type BulkToolbarUser,
+  type BulkToolbarTag,
+} from "@/components/BulkToolbar";
 import styles from "./board.module.css";
 
 /** Priority dot color + label, keyed to the design tokens. */
@@ -53,9 +57,13 @@ interface DragState {
 export default function Board({
   columns,
   isCeo,
+  users,
+  tags,
 }: {
   columns: BoardColumn[];
   isCeo: boolean;
+  users: BulkToolbarUser[];
+  tags: BulkToolbarTag[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -65,8 +73,34 @@ export default function Board({
     boardId: string;
     index: number;
   } | null>(null);
+  // Multi-select state across all columns.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const now = new Date();
+
+  // Drop ids no longer on the board (moved away / refreshed).
+  useEffect(() => {
+    const present = new Set<string>();
+    for (const col of columns) for (const c of col.cards) present.add(c.id);
+    setSelected((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (present.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [columns]);
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function runMove(taskId: string, toBoardId: string, index: number) {
     const fd = new FormData();
@@ -98,6 +132,8 @@ export default function Board({
             drag={drag}
             dropTarget={dropTarget}
             setDropTarget={setDropTarget}
+            selected={selected}
+            onToggleSelect={toggleSelect}
             onDragStart={(taskId) =>
               setDrag({ taskId, fromBoardId: col.id })
             }
@@ -114,6 +150,13 @@ export default function Board({
           </p>
         ) : null}
       </div>
+
+      <BulkToolbar
+        selectedIds={[...selected]}
+        users={users}
+        tags={tags}
+        onClear={() => setSelected(new Set())}
+      />
     </div>
   );
 }
@@ -125,6 +168,8 @@ function Column({
   drag,
   dropTarget,
   setDropTarget,
+  selected,
+  onToggleSelect,
   onDragStart,
   onDragEnd,
   onDrop,
@@ -135,6 +180,8 @@ function Column({
   drag: DragState | null;
   dropTarget: { boardId: string; index: number } | null;
   setDropTarget: (t: { boardId: string; index: number } | null) => void;
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
   onDragStart: (taskId: string) => void;
   onDragEnd: () => void;
   onDrop: (boardId: string, index: number) => void;
@@ -218,6 +265,8 @@ function Column({
               card={card}
               now={now}
               dragging={drag?.taskId === card.id}
+              selected={selected.has(card.id)}
+              onToggleSelect={onToggleSelect}
               onDragStart={() => onDragStart(card.id)}
               onDragEnd={onDragEnd}
             />
@@ -237,12 +286,16 @@ function Card({
   card,
   now,
   dragging,
+  selected,
+  onToggleSelect,
   onDragStart,
   onDragEnd,
 }: {
   card: BoardCard;
   now: Date;
   dragging: boolean;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
@@ -251,9 +304,9 @@ function Card({
   const prio = PRIORITY_META[card.priority];
 
   // Open the detail panel. Skip if the click landed on an interactive control
-  // (the status badge button / its menu), so those keep their own behavior.
+  // (the status badge button / its menu / the select checkbox), so those keep their behavior.
   function openDetail(e: React.MouseEvent) {
-    if ((e.target as HTMLElement).closest("button,a,[role='listbox']")) return;
+    if ((e.target as HTMLElement).closest("button,a,input,label,[role='listbox']")) return;
     router.push(`/board/task/${card.id}`);
   }
 
@@ -261,6 +314,7 @@ function Card({
     <article
       className={styles.card}
       data-dragging={dragging || undefined}
+      data-selected={selected || undefined}
       draggable
       role="button"
       tabIndex={0}
@@ -278,7 +332,23 @@ function Card({
       }}
       onDragEnd={onDragEnd}
     >
-      <p className={styles.cardTitle}>{card.title}</p>
+      <div className={styles.cardTop}>
+        <label
+          className={styles.cardSelect}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            className={styles.cardCheckbox}
+            checked={selected}
+            draggable={false}
+            onChange={() => onToggleSelect(card.id)}
+            aria-label={`Select ${card.title}`}
+          />
+        </label>
+        <p className={styles.cardTitle}>{card.title}</p>
+      </div>
 
       <div className={styles.cardMeta}>
         <StatusBadge taskId={card.id} badgeKey={badge.key} label={badge.label} />

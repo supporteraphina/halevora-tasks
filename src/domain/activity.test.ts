@@ -23,6 +23,8 @@ describe("ACTIVITY_TYPES", () => {
       "recurrence_spawned",
       "recurrence_closed",
       "automation_ran",
+      "template_applied",
+      "bulk_updated",
     ];
     for (const t of expected) expect(ACTIVITY_TYPES).toContain(t);
   });
@@ -110,6 +112,22 @@ describe("describeActivity", () => {
       describeActivity("automation_ran", { rule: "On done, tag shipped" }),
     ).toBe('ran the automation "On done, tag shipped"');
     expect(describeActivity("automation_ran", {})).toBe("ran an automation");
+  });
+
+  it("renders a template-applied entry with and without a template name", () => {
+    expect(
+      describeActivity("template_applied", { template: "Client onboarding" }),
+    ).toBe('created this task from the "Client onboarding" template');
+    expect(describeActivity("template_applied", {})).toBe(
+      "created this task from a template",
+    );
+  });
+
+  it("renders a bulk update naming the changed field", () => {
+    expect(describeActivity("bulk_updated", { field: "priority" })).toBe(
+      "bulk-updated priority",
+    );
+    expect(describeActivity("bulk_updated", {})).toBe("was bulk-updated");
   });
 
   it("falls back to a readable label for an unknown payload", () => {

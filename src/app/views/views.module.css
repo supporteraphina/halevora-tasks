@@ -342,27 +342,55 @@
   overflow: hidden;
 }
 
+/* A row + its leading select checkbox. The wrapper carries the separator border so the
+   checkbox column and the clickable row share one hover/selected surface. */
+.rowWrap {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.rowWrap:last-child {
+  border-bottom: none;
+}
+.rowWrap[data-selected] {
+  background: var(--primary-weak);
+}
+.rowWrap:hover {
+  background: var(--surface-2);
+}
+.rowWrap[data-selected]:hover {
+  background: var(--primary-weak);
+}
+
+.rowSelect {
+  display: flex;
+  align-items: center;
+  padding-left: var(--space-3);
+  cursor: pointer;
+}
+
+.rowCheckbox {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
 .row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: transparent;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  border-left: none;
-  border-right: none;
-  border-top: none;
-}
-
-.row:last-child {
-  border-bottom: none;
+  border: none;
 }
 
 .row:hover {
-  background: var(--surface-2);
+  background: transparent;
 }
 
 .rowMain {

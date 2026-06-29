@@ -28,6 +28,8 @@ export const ACTIVITY_TYPES = [
   "recurrence_spawned",
   "recurrence_closed",
   "automation_ran",
+  "template_applied",
+  "bulk_updated",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
@@ -128,6 +130,18 @@ export function describeActivity(type: string, data: unknown): string {
       return ruleName
         ? `ran the automation "${ruleName}"`
         : "ran an automation";
+    }
+    case "template_applied": {
+      // Recorded on a task created from a template.
+      const tpl = str(d.template);
+      return tpl
+        ? `created this task from the "${tpl}" template`
+        : "created this task from a template";
+    }
+    case "bulk_updated": {
+      // Recorded on each task touched by a bulk edit. `field` names what changed.
+      const field = str(d.field);
+      return field ? `bulk-updated ${field}` : "was bulk-updated";
     }
     default:
       return "made a change";

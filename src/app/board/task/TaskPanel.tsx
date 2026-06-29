@@ -41,6 +41,7 @@ import {
   DependenciesSection,
   RecurrenceSection,
 } from "./TaskPanelExtras";
+import { saveAsTemplateAction } from "@/app/board/templates/actions";
 import type { TaskDetail, PickerData } from "./data";
 import type { Status, Priority } from "@prisma/client";
 import styles from "./panel.module.css";
@@ -148,16 +149,19 @@ export default function TaskPanel({
       <aside className={styles.panel}>
         <header className={styles.panelHeader}>
           <span className={styles.breadcrumb}>{task.boardName}</span>
-          <button
-            type="button"
-            className={styles.closeBtn}
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
+          <div className={styles.headerActions}>
+            <SaveTemplateControl task={task} />
+            <button
+              type="button"
+              className={styles.closeBtn}
+              onClick={onClose}
+              aria-label="Close"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
         </header>
 
         <div className={styles.scroll}>
@@ -194,6 +198,111 @@ export default function TaskPanel({
           />
         </div>
       </aside>
+    </div>
+  );
+}
+
+// --- Save as template -------------------------------------------------------
+
+/**
+ * "Save as template" — snapshots this task's blueprint into a shared `TaskTemplate`. Any user
+ * who can see the task may save it (templates are shared). Opens a small popover for the name.
+ */
+function SaveTemplateControl({ task }: { task: TaskDetail }) {
+  const router = useRouter();
+  const { open, setOpen, ref } = usePopover();
+  const [name, setName] = useState(task.title);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  function save() {
+    const trimmed = name.trim();
+    if (trimmed.length === 0) {
+      setError("Name the template first.");
+      return;
+    }
+    setError(null);
+    const fd = new FormData();
+    fd.set("taskId", task.id);
+    fd.set("name", trimmed);
+    startTransition(async () => {
+      const result = await saveAsTemplateAction({}, fd);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setDone(true);
+      router.refresh();
+      setTimeout(() => {
+        setOpen(false);
+        setDone(false);
+      }, 1200);
+    });
+  }
+
+  return (
+    <div className={styles.headerMenuWrap} ref={ref}>
+      <button
+        type="button"
+        className={styles.headerBtn}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => {
+          setName(task.title);
+          setError(null);
+          setDone(false);
+          setOpen((v) => !v);
+        }}
+      >
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path
+            d="M2.5 2.5h7l2 2v7h-9z"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+          <path d="M4.5 2.5v3h4v-3M4.5 11.5v-3h5v3" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+        </svg>
+        Save as template
+      </button>
+      {open ? (
+        <div className={styles.headerMenu} role="dialog" aria-label="Save as template">
+          <p className={styles.headerMenuTitle}>Save this task as a template</p>
+          {done ? (
+            <p className={styles.headerMenuDone}>Saved. Find it under Templates.</p>
+          ) : (
+            <>
+              <input
+                className={styles.headerMenuInput}
+                placeholder="Template name"
+                value={name}
+                autoFocus
+                disabled={pending}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    save();
+                  }
+                }}
+                aria-label="Template name"
+              />
+              {error ? <p className={styles.headerMenuError}>{error}</p> : null}
+              <div className={styles.headerMenuActions}>
+                <button
+                  type="button"
+                  className={styles.smallBtn}
+                  disabled={pending}
+                  onClick={save}
+                >
+                  {pending ? "Saving…" : "Save template"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

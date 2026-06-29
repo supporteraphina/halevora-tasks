@@ -21,6 +21,7 @@ import {
 } from "./actions";
 import type { ViewTaskRow } from "./data";
 import type { SavedViewSummary, ViewKind } from "./savedViews";
+import BulkToolbar from "@/components/BulkToolbar";
 import styles from "./views.module.css";
 
 const BADGE_VARS: Record<BadgeKey, string> = {
@@ -111,6 +112,8 @@ export default function ListView({
   const [openMenu, setOpenMenu] = useState<"sort" | "filter" | "save" | null>(
     null,
   );
+  // Multi-select state: the set of selected task ids across the (filtered) rows.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const sorted = useMemo(
     () => applyView(tasks, filter, sort, now),
@@ -119,10 +122,35 @@ export default function ListView({
 
   const activeFacetCount = countActiveFacets(filter);
 
+  // Drop selected ids that are no longer present (filtered out / refreshed away).
+  useEffect(() => {
+    setSelected((prev) => {
+      const present = new Set(sorted.map((t) => t.id));
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (present.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [sorted]);
+
   function clearAll() {
     setSort([]);
     setFilter({});
   }
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const selectedIds = useMemo(() => [...selected], [selected]);
 
   return (
     <div className={styles.page}>
@@ -190,17 +218,37 @@ export default function ListView({
             </p>
           </div>
         ) : groupByBoard ? (
-          <GroupedRows tasks={sorted} now={now} timezone={timezone} />
+          <GroupedRows
+            tasks={sorted}
+            now={now}
+            timezone={timezone}
+            selected={selected}
+            onToggleSelect={toggleSelect}
+          />
         ) : (
           <div className={styles.group}>
             <div className={styles.rows}>
               {sorted.map((t) => (
-                <TaskRow key={t.id} task={t} now={now} timezone={timezone} />
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  now={now}
+                  timezone={timezone}
+                  selected={selected.has(t.id)}
+                  onToggleSelect={toggleSelect}
+                />
               ))}
             </div>
           </div>
         )}
       </div>
+
+      <BulkToolbar
+        selectedIds={selectedIds}
+        users={options.users}
+        tags={options.tags}
+        onClear={() => setSelected(new Set())}
+      />
     </div>
   );
 }
@@ -681,10 +729,14 @@ function GroupedRows({
   tasks,
   now,
   timezone,
+  selected,
+  onToggleSelect,
 }: {
   tasks: ViewTaskRow[];
   now: Date;
   timezone: string;
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
   // Preserve the sorted order while bucketing by board.
   const groups: { id: string; name: string; color: string | null; rows: ViewTaskRow[] }[] = [];
@@ -714,7 +766,14 @@ function GroupedRows({
           </div>
           <div className={styles.rows}>
             {g.rows.map((t) => (
-              <TaskRow key={t.id} task={t} now={now} timezone={timezone} />
+              <TaskRow
+                key={t.id}
+                task={t}
+                now={now}
+                timezone={timezone}
+                selected={selected.has(t.id)}
+                onToggleSelect={onToggleSelect}
+              />
             ))}
           </div>
         </div>
@@ -727,21 +786,35 @@ function TaskRow({
   task,
   now,
   timezone,
+  selected,
+  onToggleSelect,
 }: {
   task: ViewTaskRow;
   now: Date;
   timezone: string;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
 }) {
   const router = useRouter();
   const badge = badgeFor(task, now);
   const tone = BADGE_VARS[badge.key];
 
   return (
-    <button
-      type="button"
-      className={styles.row}
-      onClick={() => router.push(`/board/task/${task.id}`)}
-    >
+    <div className={styles.rowWrap} data-selected={selected || undefined}>
+      <label className={styles.rowSelect}>
+        <input
+          type="checkbox"
+          className={styles.rowCheckbox}
+          checked={selected}
+          onChange={() => onToggleSelect(task.id)}
+          aria-label={`Select ${task.title}`}
+        />
+      </label>
+      <button
+        type="button"
+        className={styles.row}
+        onClick={() => router.push(`/board/task/${task.id}`)}
+      >
       <div className={styles.rowMain}>
         <span className={styles.rowTitle}>{task.title}</span>
         <span className={styles.rowSub}>
@@ -804,6 +877,7 @@ function TaskRow({
           </span>
         )}
       </div>
-    </button>
+      </button>
+    </div>
   );
 }
