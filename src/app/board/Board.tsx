@@ -700,6 +700,13 @@ function Card({
       role="button"
       tabIndex={0}
       onClick={openDetail}
+      onMouseEnter={() => {
+        // Warm the task detail (route + data) on hover so the panel is ready on click.
+        if (!isTemp) router.prefetch(`/board/task/${card.id}`);
+      }}
+      onFocus={() => {
+        if (!isTemp) router.prefetch(`/board/task/${card.id}`);
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
