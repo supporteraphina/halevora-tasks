@@ -1,0 +1,12 @@
+// Halevora Tasks — Prisma schema
+// Section 0: datasource + generator only. Models arrive in Section 1.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
