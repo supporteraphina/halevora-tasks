@@ -42,8 +42,8 @@ async function findVisibleTask(taskId: string) {
   return { actor, task };
 }
 
-/** A small fixed palette for new board accent dots, cycled by board count. */
-const BOARD_COLORS = ["#7C5CFF", "#22C55E", "#F59E0B", "#EF4444", "#3B82F6", "#EC4899"];
+/** A small fixed palette for new board accent dots, cycled by board count (no purple). */
+const BOARD_COLORS = ["#3B82F6", "#22C55E", "#F59E0B", "#EF4444", "#14B8A6", "#EC4899"];
 
 /**
  * Create a new board (column) in the workspace's first project. Any signed-in user may create
