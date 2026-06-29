@@ -5,24 +5,32 @@ defined in [src/styles/tokens.css](src/styles/tokens.css); this document explain
 
 ## Theme
 
-Dark theme, matching Noel's ClickUp screenshots. A dark blue-gray app surface (`--bg`) with a
-deeper sunken canvas (`--bg-sunken`) for the board, and slightly raised cards (`--surface`). The
-indigo-violet brand (hue ~286) carries identity through primary actions, selection, and the focus
-ring; the surface stays neutral. Color strategy: **Restrained** (tinted dark neutrals + one
-accent). `color-scheme: dark` is set so native controls and scrollbars render dark. The token
-architecture is variable-based, so a light theme can return later via an alternate `:root` block.
+Premium near-black dark theme — ClickUp's density and polish, minus the purple. A near-black app
+surface (`--bg`, faint cool tint ~hue 262) over a deeper sunken canvas (`--bg-sunken`) for the
+board, with surfaces layered for depth: raised cards/panels (`--surface`), hover/inputs
+(`--surface-2`), and a top layer for menus/popovers/toasts (`--surface-3`), separated by subtle
+borders and soft layered shadows (`--shadow-card` resting, `--shadow-md` lift, `--shadow-pop`
+overlays). A single confident **blue** (`--primary`, hue ~252) carries interactive/active state —
+primary actions, selection, focus ring, the active tab; the surface stays neutral and color
+otherwise does real semantic work (status, priority, progress, per-board identity). Color
+strategy: **Restrained** + intentional semantic color. `color-scheme: dark` renders native
+controls/scrollbars dark. The token architecture is variable-based, so a light theme can return
+later via an alternate `:root` block.
 
 ## Color
 
 OKLCH throughout. Roles, not raw values (see `tokens.css`):
 
-- **Surfaces:** `--bg` (app), `--bg-sunken` (board/columns, recessed), `--surface`
-  (cards/panels/menus, raised), `--surface-2` (hover/raised). Cards sit above the darker canvas,
-  separated by `--border`.
+- **Surfaces (layered):** `--bg` (app), `--bg-sunken` (board/columns, recessed), `--surface`
+  (cards/panels, raised), `--surface-2` (hover/inputs), `--surface-3` (menus/popovers/toasts, top
+  layer). Borders ramp `--border-subtle` < `--border` < `--border-strong`; depth comes from
+  `--shadow-card` (resting), `--shadow-md` (hover lift), `--shadow-pop` (overlays), `--shadow-lg`,
+  and `--hairline-top`.
 - **Text:** `--ink` (primary near-white), `--ink-muted` (secondary, >=4.5:1 on surfaces),
   `--ink-subtle` (icons and non-text only, never body copy).
-- **Brand / interactive:** `--primary`, `--primary-strong` (hover/active), `--primary-weak`
-  (selected/hover tint), `--on-primary` (text on primary), `--ring` (focus).
+- **Brand / interactive (blue, hue ~252 — never purple):** `--primary`, `--primary-strong`
+  (hover/active), `--primary-weak` (selected/hover tint), `--primary-softer` (faint selected
+  fill), `--on-primary` (text on primary), `--ring` (focus).
 - **Semantic states:** `--success`, `--warning`, `--danger`, `--info`, each with a `-weak` tint.
 - **Task status:** `--status-todo`, `--status-progress`, `--status-done`, `--status-reviewed`,
   `--status-overdue`, each with a `-weak` background tint for badges.
@@ -30,9 +38,19 @@ OKLCH throughout. Roles, not raw values (see `tokens.css`):
 
 Rule: color never carries meaning alone. Status and priority always pair color with a label or icon.
 
+## Motion
+
+A small, reusable library lives in `globals.css` (global `@keyframes` + `.hv-*` utilities) and is
+token-driven (`--dur-*`, `--ease-out` workhorse, restrained `--ease-spring` for entrance/feedback
+only). Surfaces use it consistently: pages fade per navigation, columns/cards/rows reveal in a
+gentle `:nth-child` stagger, cards/rows hover-lift, menus/popovers pop, panels drawer-in over a
+scrim, completions confirm. Transform/opacity only; every animation runs on mount and ends at the
+visible default; `prefers-reduced-motion` collapses durations globally (no animation gates content).
+
 ## Typography
 
-- **One family:** the system sans stack (`--font-sans`). `--font-mono` for IDs/code.
+- **One family: Inter** (`--font-sans`, via `next/font`), with a system-sans fallback. `--font-mono`
+  for IDs/code. Inter font-features + heading tracking tokens (`--tracking-tight/-snug/-wide`).
 - **Fixed rem scale** (`--fs-xs` 12 through `--fs-3xl` 36), ~1.2 ratio. No fluid clamp in product UI.
   Default UI size is `--fs-base` (14px); prose uses `--fs-md` (16px).
 - Weights: `--fw-regular` 400, `--fw-medium` 500, `--fw-semibold` 600, `--fw-bold` 700. Headings are
