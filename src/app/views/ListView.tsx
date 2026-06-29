@@ -167,6 +167,8 @@ export default function ListView({
         activeViewId={activeView?.id ?? null}
       />
 
+      <SummaryCards tasks={tasks} now={now} />
+
       <div className={styles.toolbar}>
         <SortControl
           open={openMenu === "sort"}
@@ -217,28 +219,31 @@ export default function ListView({
                 : "No tasks match the current filters."}
             </p>
           </div>
-        ) : groupByBoard ? (
-          <GroupedRows
-            tasks={sorted}
-            now={now}
-            timezone={timezone}
-            selected={selected}
-            onToggleSelect={toggleSelect}
-          />
         ) : (
-          <div className={styles.group}>
-            <div className={styles.rows}>
-              {sorted.map((t) => (
-                <TaskRow
-                  key={t.id}
-                  task={t}
-                  now={now}
-                  timezone={timezone}
-                  selected={selected.has(t.id)}
-                  onToggleSelect={toggleSelect}
-                />
-              ))}
-            </div>
+          <div className={styles.table}>
+            <TableHeader />
+            {groupByBoard ? (
+              <GroupedRows
+                tasks={sorted}
+                now={now}
+                timezone={timezone}
+                selected={selected}
+                onToggleSelect={toggleSelect}
+              />
+            ) : (
+              <div className={styles.rows}>
+                {sorted.map((t) => (
+                  <TaskRow
+                    key={t.id}
+                    task={t}
+                    now={now}
+                    timezone={timezone}
+                    selected={selected.has(t.id)}
+                    onToggleSelect={toggleSelect}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -757,7 +762,7 @@ function GroupedRows({
         <div key={g.id} className={styles.group}>
           <div className={styles.groupHeader}>
             <span
-              className={styles.groupDot}
+              className={styles.groupIcon}
               style={{ background: g.color ?? "var(--ink-subtle)" }}
               aria-hidden="true"
             />
@@ -782,6 +787,112 @@ function GroupedRows({
   );
 }
 
+/* ---- Small inline icons ---- */
+function FlagIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <path d="M3 1v10M3 1h6l-1.2 2L9 5H3" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CalIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <rect x="1.5" y="2.5" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M1.5 5.5h11M4.5 1v2M9.5 1v2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SubtaskIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M2 3.5h7M2 7h5M2 10.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** A status glyph for the pill — hollow circle, in-progress half, check, alert. */
+function StatusIcon({ badgeKey }: { badgeKey: BadgeKey }) {
+  const common = { width: 12, height: 12, viewBox: "0 0 14 14", fill: "none" as const, "aria-hidden": true };
+  switch (badgeKey) {
+    case "DONE":
+    case "REVIEWED":
+      return (
+        <svg {...common}>
+          <circle cx="7" cy="7" r="6" fill="currentColor" opacity="0.18" />
+          <path d="M4.2 7.2l1.9 1.9L9.9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "IN_PROGRESS":
+      return (
+        <svg {...common}>
+          <circle cx="7" cy="7" r="5.4" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M7 7V2.2A4.8 4.8 0 0 1 7 11.8z" fill="currentColor" />
+        </svg>
+      );
+    case "OVERDUE":
+      return (
+        <svg {...common}>
+          <circle cx="7" cy="7" r="5.4" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M7 4v3.4M7 9.6v.05" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      );
+    default: // TODO
+      return (
+        <svg {...common}>
+          <circle cx="7" cy="7" r="5.2" stroke="currentColor" strokeWidth="1.4" strokeDasharray="2.4 2.2" />
+        </svg>
+      );
+  }
+}
+
+/** Metric cards (To Do / In Progress / Overdue / Done) summarising the whole view. */
+function SummaryCards({ tasks, now }: { tasks: ViewTaskRow[]; now: Date }) {
+  const counts = useMemo(() => {
+    const c = { TODO: 0, IN_PROGRESS: 0, DONE: 0, REVIEWED: 0, OVERDUE: 0 } as Record<BadgeKey, number>;
+    for (const t of tasks) c[badgeFor(t, now).key]++;
+    return c;
+  }, [tasks, now]);
+
+  const cards: { label: string; tone: string; value: number; key: BadgeKey }[] = [
+    { label: "To Do", tone: "todo", value: counts.TODO, key: "TODO" },
+    { label: "In Progress", tone: "progress", value: counts.IN_PROGRESS, key: "IN_PROGRESS" },
+    { label: "Overdue", tone: "overdue", value: counts.OVERDUE, key: "OVERDUE" },
+    { label: "Done", tone: "done", value: counts.DONE + counts.REVIEWED, key: "DONE" },
+  ];
+
+  return (
+    <div className={styles.summary}>
+      {cards.map((card) => (
+        <div key={card.label} className={`${styles.summaryCard} hv-lift`} data-tone={card.tone}>
+          <span className={styles.summaryTop}>
+            <span className={styles.summaryIcon} data-tone={card.tone} aria-hidden="true">
+              <StatusIcon badgeKey={card.key} />
+            </span>
+            <span className={styles.summaryLabel}>{card.label}</span>
+          </span>
+          <span className={styles.summaryValue}>{card.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Sticky column-label row that aligns to the task grid. */
+function TableHeader() {
+  return (
+    <div className={styles.tableHeader} aria-hidden="true">
+      <span />
+      <span>Name</span>
+      <span>Assignee</span>
+      <span>Due date</span>
+      <span>Status</span>
+    </div>
+  );
+}
+
 function TaskRow({
   task,
   now,
@@ -799,9 +910,25 @@ function TaskRow({
   const badge = badgeFor(task, now);
   const tone = BADGE_VARS[badge.key];
 
+  function open() {
+    router.push(`/board/task/${task.id}`);
+  }
+
   return (
-    <div className={styles.rowWrap} data-selected={selected || undefined}>
-      <label className={styles.rowSelect}>
+    <div
+      className={styles.rowWrap}
+      data-selected={selected || undefined}
+      role="button"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          open();
+        }
+      }}
+    >
+      <label className={styles.rowSelect} onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
           className={styles.rowCheckbox}
@@ -810,12 +937,8 @@ function TaskRow({
           aria-label={`Select ${task.title}`}
         />
       </label>
-      <button
-        type="button"
-        className={styles.row}
-        onClick={() => router.push(`/board/task/${task.id}`)}
-      >
-      <div className={styles.rowMain}>
+
+      <div className={styles.cellName}>
         <span className={styles.rowTitle}>{task.title}</span>
         <span className={styles.rowSub}>
           <span className={styles.rowBoard}>
@@ -827,47 +950,25 @@ function TaskRow({
             {task.boardName}
           </span>
           {task.subtaskCount > 0 && (
-            <span>· {task.subtaskCount} subtask{task.subtaskCount === 1 ? "" : "s"}</span>
+            <span className={styles.subMeta}>
+              <SubtaskIcon /> {task.subtaskCount}
+            </span>
+          )}
+          {task.priority !== "NORMAL" && (
+            <span
+              className={styles.prioFlag}
+              style={{ color: `var(${PRIORITY_VAR[task.priority]})` }}
+              title={`${PRIORITY_LABEL[task.priority]} priority`}
+              aria-label={`${PRIORITY_LABEL[task.priority]} priority`}
+            >
+              <FlagIcon />
+            </span>
           )}
         </span>
       </div>
 
-      <div className={styles.rowMeta}>
-        <span className={styles.badge} data-tone={tone}>
-          <span className={styles.badgeDot} data-tone={tone} aria-hidden="true" />
-          {badge.label}
-        </span>
-
-        {task.priority !== "NORMAL" && (
-          <span
-            className={styles.prioFlag}
-            style={{ color: `var(${PRIORITY_VAR[task.priority]})` }}
-            title={`${PRIORITY_LABEL[task.priority]} priority`}
-            aria-label={`${PRIORITY_LABEL[task.priority]} priority`}
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path
-                d="M3 1v10M3 1h6l-1.2 2L9 5H3"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-            </svg>
-          </span>
-        )}
-
-        {task.dueAt && (
-          <span className={styles.rowDue} data-overdue={badge.key === "OVERDUE"}>
-            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <rect x="1.5" y="2.5" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-              <path d="M1.5 5.5h11M4.5 1v2M9.5 1v2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-            </svg>
-            {formatInZone(task.dueAt, timezone)}
-          </span>
-        )}
-
-        {task.assignees.length > 0 && (
+      <div className={styles.cellAssignee}>
+        {task.assignees.length > 0 ? (
           <span className={styles.avatars}>
             {task.assignees.slice(0, 3).map((a) => (
               <span key={a.id} className={styles.avatar} title={a.name} aria-label={a.name}>
@@ -875,9 +976,28 @@ function TaskRow({
               </span>
             ))}
           </span>
+        ) : (
+          <span className={styles.cellEmpty}>—</span>
         )}
       </div>
-      </button>
+
+      <div className={styles.cellDue}>
+        {task.dueAt ? (
+          <span className={styles.rowDue} data-tone={tone}>
+            <CalIcon />
+            {formatInZone(task.dueAt, timezone)}
+          </span>
+        ) : (
+          <span className={styles.cellEmpty}>—</span>
+        )}
+      </div>
+
+      <div className={styles.cellStatus}>
+        <span className={styles.badge} data-tone={tone}>
+          <StatusIcon badgeKey={badge.key} />
+          {badge.label}
+        </span>
+      </div>
     </div>
   );
 }

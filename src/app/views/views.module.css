@@ -90,6 +90,58 @@
   background: var(--danger-weak);
 }
 
+/* ---- Summary metric cards ---- */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-4) var(--space-2);
+}
+
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card), var(--hairline-top);
+}
+
+.summaryTop {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.summaryIcon {
+  display: inline-flex;
+}
+.summaryIcon[data-tone="todo"] { color: var(--status-todo); }
+.summaryIcon[data-tone="progress"] { color: var(--status-progress); }
+.summaryIcon[data-tone="done"] { color: var(--status-done); }
+.summaryIcon[data-tone="overdue"] { color: var(--status-overdue); }
+
+.summaryLabel {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--ink-muted);
+  font-weight: var(--fw-semibold);
+}
+
+.summaryValue {
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+/* Overdue draws the eye when it matters. */
+.summaryCard[data-tone="overdue"] .summaryValue { color: var(--status-overdue); }
+
 /* ---- Toolbar (sort + filter + save) ---- */
 .toolbar {
   display: flex;
@@ -304,7 +356,7 @@
   font-size: var(--fs-sm);
 }
 
-/* ---- Task list (rows, optionally grouped) ---- */
+/* ---- Task table (column-aligned rows, optionally grouped) ---- */
 .scroll {
   flex: 1;
   min-height: 0;
@@ -312,98 +364,116 @@
   padding: 0 var(--space-4) var(--space-6);
 }
 
+/* The grid template shared by the header and every row so columns line up. */
+.table {
+  --vgrid: 1.75rem minmax(0, 1fr) 6.5rem 9rem 9.5rem;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: var(--vgrid);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--ink-subtle);
+  font-weight: var(--fw-semibold);
+}
+
 .group {
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
 }
 
 .groupHeader {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
   position: sticky;
-  top: 0;
+  top: 2.1rem;
   background: var(--bg);
-  z-index: 1;
+  z-index: 2;
+}
+
+.groupIcon {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  box-shadow: var(--hairline-top);
 }
 
 .groupDot {
-  width: 0.625rem;
-  height: 0.625rem;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: var(--radius-full);
   flex-shrink: 0;
 }
 
 .groupName {
   font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   color: var(--ink);
+  letter-spacing: -0.005em;
 }
 
 .groupCount {
   font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
   color: var(--ink-muted);
   background: var(--surface-2);
   border-radius: var(--radius-full);
-  padding: 0 var(--space-2);
+  padding: 1px var(--space-2);
+  min-width: 1.25rem;
+  text-align: center;
 }
 
 .rows {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
 }
 
-/* A row + its leading select checkbox, presented as a discrete card (board parity).
-   The wrapper carries depth + a hover lift; the checkbox column and the clickable
-   row share one surface so hover/selected read as a single object. */
+/* A tight, column-aligned table row (ClickUp density). The whole row opens the
+   task; the checkbox stops propagation for bulk select. Rows separate with a
+   hairline and highlight the full row on hover. */
 .rowWrap {
-  display: flex;
-  align-items: stretch;
-  background: var(--surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
-  transition: border-color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
-  /* Gentle staggered reveal on mount. */
+  display: grid;
+  grid-template-columns: var(--vgrid);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  min-height: 2.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--dur-fast) var(--ease-out);
   animation: hv-rise-sm var(--dur-base) var(--ease-out) both;
 }
+.rows > .rowWrap:last-child { border-bottom: none; }
 
 /* Per-row stagger within a group. */
-.rows > .rowWrap:nth-child(1) { animation-delay: 40ms; }
-.rows > .rowWrap:nth-child(2) { animation-delay: 70ms; }
-.rows > .rowWrap:nth-child(3) { animation-delay: 100ms; }
-.rows > .rowWrap:nth-child(4) { animation-delay: 130ms; }
-.rows > .rowWrap:nth-child(5) { animation-delay: 160ms; }
-.rows > .rowWrap:nth-child(6) { animation-delay: 190ms; }
-.rows > .rowWrap:nth-child(n + 7) { animation-delay: 210ms; }
+.rows > .rowWrap:nth-child(1) { animation-delay: 24ms; }
+.rows > .rowWrap:nth-child(2) { animation-delay: 48ms; }
+.rows > .rowWrap:nth-child(3) { animation-delay: 72ms; }
+.rows > .rowWrap:nth-child(4) { animation-delay: 96ms; }
+.rows > .rowWrap:nth-child(5) { animation-delay: 120ms; }
+.rows > .rowWrap:nth-child(n + 6) { animation-delay: 140ms; }
 
-.rowWrap[data-selected] {
-  background: var(--primary-weak);
-  border-color: var(--primary);
-  box-shadow: 0 0 0 1px var(--primary), var(--shadow-card);
-}
-.rowWrap:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-2);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
-}
-.rowWrap:active {
-  transform: translateY(0);
-}
-.rowWrap[data-selected]:hover {
-  background: var(--primary-weak);
-  border-color: var(--primary);
-}
+.rowWrap:hover { background: var(--surface-2); }
+.rowWrap:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.rowWrap[data-selected] { background: var(--primary-softer); }
+.rowWrap[data-selected]:hover { background: var(--primary-weak); }
 
 .rowSelect {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  padding-left: var(--space-3);
+  justify-content: center;
   cursor: pointer;
 }
 
@@ -414,32 +484,16 @@
   cursor: pointer;
 }
 
-.row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  width: 100%;
-  border: none;
-}
-
-.row:hover {
-  background: transparent;
-}
-
-.rowMain {
+.cellName {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  flex: 1;
 }
 
 .rowTitle {
   font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -452,22 +506,41 @@
   gap: var(--space-2);
   font-size: var(--fs-xs);
   color: var(--ink-muted);
+  min-width: 0;
 }
 
 .rowBoard {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.rowMeta {
+.subMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.prioFlag {
+  display: inline-flex;
+}
+
+.cellAssignee,
+.cellDue,
+.cellStatus {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  flex-shrink: 0;
+  min-width: 0;
 }
 
-/* Reuse the badge vocabulary inline (mirrors board.module.css tones). */
+.cellEmpty {
+  color: var(--ink-subtle);
+}
+
+/* ---- Status pill (icon + label) ---- */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -477,16 +550,10 @@
   border-radius: var(--radius-sm);
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   white-space: nowrap;
 }
-
-.badgeDot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: var(--radius-full);
-  flex-shrink: 0;
-}
+.badge svg { flex-shrink: 0; }
 
 .badge[data-tone="todo"] { color: var(--status-todo); background: var(--status-todo-weak); }
 .badge[data-tone="progress"] { color: var(--status-progress); background: var(--status-progress-weak); }
@@ -494,16 +561,7 @@
 .badge[data-tone="reviewed"] { color: var(--status-reviewed); background: var(--status-reviewed-weak); }
 .badge[data-tone="overdue"] { color: var(--status-overdue); background: var(--status-overdue-weak); }
 
-.badgeDot[data-tone="todo"] { background: var(--status-todo); }
-.badgeDot[data-tone="progress"] { background: var(--status-progress); }
-.badgeDot[data-tone="done"] { background: var(--status-done); }
-.badgeDot[data-tone="reviewed"] { background: var(--status-reviewed); }
-.badgeDot[data-tone="overdue"] { background: var(--status-overdue); }
-
-.prioFlag {
-  display: inline-flex;
-}
-
+/* ---- Due date, color-coded by derived status ---- */
 .rowDue {
   display: inline-flex;
   align-items: center;
@@ -512,11 +570,9 @@
   color: var(--ink-muted);
   white-space: nowrap;
 }
-
-.rowDue[data-overdue="true"] {
-  color: var(--status-overdue);
-  font-weight: var(--fw-medium);
-}
+.rowDue[data-tone="overdue"] { color: var(--status-overdue); font-weight: var(--fw-medium); }
+.rowDue[data-tone="done"] { color: var(--status-done); }
+.rowDue[data-tone="reviewed"] { color: var(--status-reviewed); }
 
 .avatars {
   display: inline-flex;
@@ -534,7 +590,7 @@
   color: var(--primary-strong);
   font-size: 0.625rem;
   font-weight: var(--fw-semibold);
-  border: 1.5px solid var(--surface);
+  border: 1.5px solid var(--bg);
   flex-shrink: 0;
 }
 
@@ -672,21 +728,43 @@
 .saveBtn:disabled { opacity: 0.6; }
 
 /* ---- Mobile ---- */
+@media (max-width: 720px) {
+  /* Summary cards go 2-up. */
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
-  /* Let the row wrap so a long title never squeezes the meta off-screen;
-     the status/priority/due meta drops below the title when space is tight. */
-  .row {
-    flex-wrap: wrap;
-    row-gap: var(--space-2);
+  /* The fixed columns don't fit a phone, so the row collapses to two lines:
+     [checkbox][name][status] on top, the due date below — no overflow. */
+  .tableHeader {
+    display: none;
   }
-  .rowMain {
-    flex-basis: 100%;
+  .rowWrap {
+    grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      "sel name status"
+      "sel due  due";
+    column-gap: var(--space-2);
+    row-gap: 2px;
+    align-items: center;
   }
-  .rowMeta {
-    gap: var(--space-2);
-    flex-wrap: wrap;
+  .rowSelect {
+    grid-area: sel;
+    align-self: center;
   }
-  .rowMeta .avatars {
+  .cellName {
+    grid-area: name;
+  }
+  .cellStatus {
+    grid-area: status;
+  }
+  .cellDue {
+    grid-area: due;
+    justify-self: start;
+  }
+  .cellAssignee {
     display: none;
   }
   .popover {
