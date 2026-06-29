@@ -162,10 +162,11 @@
 
 /* ---- Title ---- */
 .title {
-  font-size: var(--fs-xl);
-  font-weight: var(--fw-semibold);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
   color: var(--ink);
-  line-height: var(--lh-snug);
+  line-height: 1.4;
+  letter-spacing: -0.012em;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
@@ -181,7 +182,7 @@
      min-height must include the textarea's own padding (border-box) or the
      line is taller than its box and the glyph tops clip. */
   display: block;
-  min-height: calc(var(--fs-xl) * var(--lh-snug) + 2 * var(--space-2));
+  min-height: calc(var(--fs-2xl) * 1.4 + 2 * var(--space-2));
   overflow: hidden;
 }
 
