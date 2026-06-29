@@ -84,12 +84,23 @@ export default function Board({
   // Live board: subscribe to every visible board column. A task event (create/move/status/
   // bulk/detail change) for a board the viewer can see prompts a server refresh — the SSE
   // relay has already authorized the event per subscriber, so a member never gets a refresh
-  // signal for a task they can't see. Realtime is additive: if the stream drops, manual
-  // reload still works.
+  // signal for a task they can't see. The refresh is DEBOUNCED so a burst (a bulk edit, a
+  // few active teammates, or the echo of your own edit landing on top of its action's
+  // refresh) coalesces into ONE refetch instead of a storm. Realtime is additive: if the
+  // stream drops, manual reload still works.
   const boardIds = useMemo(() => columns.map((c) => c.id), [columns]);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useRealtime(boardIds, (event) => {
-    if (event.type === "task") router.refresh();
+    if (event.type !== "task") return;
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => router.refresh(), 250);
   });
+  useEffect(
+    () => () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    },
+    [],
+  );
 
   const now = new Date();
 

@@ -264,57 +264,47 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetail | null>
 
   if (!task) return null;
 
-  // The board's custom field definitions (a field belongs to the board, not the task).
-  // Loaded only AFTER the task passed the scope check above, so this never leaks a
-  // hidden task's board: we already proved the actor may see this task.
-  const fields = await prisma.customField.findMany({
-    where: { boardId: task.boardId },
-    orderBy: { order: "asc" },
-    select: { id: true, name: true, type: true, config: true, order: true },
-  });
+  // The displayed dependency lists are SCOPED — only show titles of linked tasks the actor
+  // may see. Collect the linked ids up front so the follow-up reads can run together.
+  const linkedIds = [
+    ...task.blockedBy.map((e) => e.blocker.id),
+    ...task.blocking.map((e) => e.blocked.id),
+  ];
+
+  // Three independent reads, each gated by the scope check the task already passed — run in
+  // PARALLEL (was three sequential round-trips): the board's custom-field definitions, the
+  // actor's own visible subtasks, and the visible subset of linked dependency tasks.
+  const [fields, subtasks, visibleLinkedRows] = await Promise.all([
+    prisma.customField.findMany({
+      where: { boardId: task.boardId },
+      orderBy: { order: "asc" },
+      select: { id: true, name: true, type: true, config: true, order: true },
+    }),
+    // Subtasks are Tasks too — scoped independently to the actor's OWN visibility (a member
+    // sees a subtask only when assigned to it, per-row, not by virtue of seeing the parent).
+    prisma.task.findMany({
+      where: { AND: [taskScopeWhere(actor), { parentId: task.id, archivedAt: null }] },
+      orderBy: { order: "asc" },
+      select: { id: true, title: true, status: true, dueAt: true },
+    }),
+    linkedIds.length === 0
+      ? Promise.resolve([] as { id: string }[])
+      : prisma.task.findMany({
+          where: { AND: [taskScopeWhere(actor), { id: { in: linkedIds } }] },
+          select: { id: true },
+        }),
+  ]);
+
   const valueByField = new Map(
     task.customFieldValues.map((v) => [v.fieldId, v.value]),
   );
-
-  // Subtasks are Tasks too — scope them independently to the actor's OWN visibility,
-  // composing the scope fragment with parentId = this task. A member sees a subtask only
-  // when assigned to that subtask (per-row), not by virtue of seeing the parent.
-  const subtasks = await prisma.task.findMany({
-    where: {
-      AND: [
-        taskScopeWhere(actor),
-        { parentId: task.id, archivedAt: null },
-      ],
-    },
-    orderBy: { order: "asc" },
-    select: { id: true, title: true, status: true, dueAt: true },
-  });
+  const visibleLinked = new Set(visibleLinkedRows.map((t) => t.id));
 
   // The Done-gate counts ALL open blockers (security-critical): a member must not bypass
   // the gate by being unable to see a blocking task. This count is over the full edge set.
   const openCount = openBlockerCount(
     task.blockedBy.map((e) => ({ status: e.blocker.status })),
   );
-
-  // The displayed lists, by contrast, are SCOPED: only show titles of linked tasks the actor
-  // may see (never leak a hidden task's title). Resolve the visible subset of linked ids.
-  const linkedIds = [
-    ...task.blockedBy.map((e) => e.blocker.id),
-    ...task.blocking.map((e) => e.blocked.id),
-  ];
-  const visibleLinked =
-    linkedIds.length === 0
-      ? new Set<string>()
-      : new Set(
-          (
-            await prisma.task.findMany({
-              where: {
-                AND: [taskScopeWhere(actor), { id: { in: linkedIds } }],
-              },
-              select: { id: true },
-            })
-          ).map((t) => t.id),
-        );
 
   const waitingOn: DetailDependency[] = task.blockedBy
     .filter((e) => visibleLinked.has(e.blocker.id))

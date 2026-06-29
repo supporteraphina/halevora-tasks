@@ -20,13 +20,15 @@ export default async function TaskDetailView({
   const actor = await currentActor();
   if (!actor) redirect("/login");
 
-  const task = await loadTaskDetail(taskId);
-  if (!task) notFound(); // invisible or non-existent — same response, no existence leak.
-
-  const [picker, aiEnabled] = await Promise.all([
+  // The task read, the (non-scoped) picker lists, and the AI-availability check are
+  // independent — run them together instead of serially. The picker is small and not
+  // sensitive; loading it before the visibility check is fine (it's never task content).
+  const [task, picker, aiEnabled] = await Promise.all([
+    loadTaskDetail(taskId),
     loadPickerData(),
     aiAssistAvailable(),
   ]);
+  if (!task) notFound(); // invisible or non-existent — same response, no existence leak.
 
   return (
     <TaskPanelClient
