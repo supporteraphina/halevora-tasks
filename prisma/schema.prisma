@@ -1,5 +1,15 @@
-// Halevora Tasks — Prisma schema
-// Section 0: datasource + generator only. Models arrive in Section 1.
+// Halevora Tasks — Prisma schema (Section 1: full v1 data model)
+//
+// Design notes (load-bearing — see docs/handoffs/00-START-HERE.md §4):
+//   * Overdue is DERIVED (past dueAt AND not closed), NEVER a column. See src/domain/status.ts.
+//   * Soft-delete only: Task.archivedAt. Nothing in v1 hard-deletes a task.
+//   * Visibility is custom row-level scoping (Section 2): a MEMBER sees only tasks they are
+//     assigned to; a CEO sees all. The Task<->User assignee relation is the hinge for that.
+//   * Subtasks are full Tasks (self-relation via parentId) — the faithful ClickUp model.
+//     Board/list queries filter parentId = null.
+//   * A TaskDependency is a single directed edge: `blocker` must close before `blocked`
+//     can be Done. "Waiting on" is simply the inverse view (a task's incoming blockers);
+//     "blocking" is the outgoing view. Cycle prevention lives in app logic (Section 6).
 
 generator client {
   provider = "prisma-client-js"
@@ -9,4 +19,420 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  CEO
+  MEMBER
+}
+
+/// Mirror of src/domain/status.ts — keep identical.
+enum Status {
+  TODO
+  IN_PROGRESS
+  DONE
+  REVIEWED
+}
+
+/// Mirror of src/domain/priority.ts.
+enum Priority {
+  URGENT
+  HIGH
+  NORMAL
+  LOW
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  CHECKBOX
+  DATE
+  DROPDOWN
+  LABELS
+  RATING
+  PEOPLE
+  SLIDER // manual progress (0-100)
+}
+
+/// How a recurring task repeats.
+enum Cadence {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+  CUSTOM
+}
+
+/// What fires the next occurrence of a recurring task.
+enum RecurrenceTrigger {
+  ON_STATUS_CHANGE // recur when the task is marked Done
+  ON_SCHEDULE // recur on the calendar date regardless of status
+}
+
+// ---------------------------------------------------------------------------
+// Identity & workspace hierarchy
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String? // set by seed / Section 2 (credentials auth)
+  image        String?
+  role         Role     @default(MEMBER)
+  timezone     String   @default("UTC") // store UTC, render per-user
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  assignedTasks      Task[]          @relation("TaskAssignees")
+  createdTasks       Task[]          @relation("TaskCreatedBy")
+  comments           Comment[]
+  activity           ActivityLog[]
+  attachments        Attachment[]
+  chatMessages       ChatMessage[]
+  checklistItems     ChecklistItem[] @relation("ChecklistItemAssignee")
+  templates          TaskTemplate[]
+  automationRules    AutomationRule[]
+  customFieldPeople  CustomFieldValue[] @relation("CustomFieldPeople")
+
+  @@index([role])
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects Project[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  order       Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  boards    Board[]
+
+  @@index([workspaceId])
+}
+
+/// A Board is a column/section (ClickUp calls it a List). It owns tasks and a chat.
+model Board {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String
+  color       String? // accent color (hex/oklch), optional
+  order       Float    @default(0)
+  archivedAt  DateTime? // soft-delete (matches delete-from-board behaviour)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks           Task[]
+  chatMessages    ChatMessage[]
+  customFields    CustomField[]
+  automationRules AutomationRule[]
+  templates       TaskTemplate[]
+
+  @@index([projectId])
+}
+
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+model Task {
+  id           String    @id @default(cuid())
+  boardId      String
+  parentId     String? // non-null => this Task is a subtask of another Task
+  title        String
+  description  Json? // Tiptap document
+  status       Status    @default(TODO)
+  priority     Priority  @default(NORMAL)
+  startAt      DateTime? // explicit start date (UTC)
+  dueAt        DateTime? // due date (UTC); Overdue derived, never stored
+  timeEstimate Int? // minutes
+  order        Float     @default(0) // position within its (board, status) column
+  archivedAt   DateTime? // soft-delete
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  board       Board   @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  parent      Task?   @relation("TaskSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks    Task[]  @relation("TaskSubtasks")
+  createdBy   User?   @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  assignees        User[]             @relation("TaskAssignees")
+  tags             Tag[]              @relation("TaskTags")
+  checklists       Checklist[]
+  comments         Comment[]
+  activity         ActivityLog[]
+  attachments      Attachment[]
+  customFieldValues CustomFieldValue[]
+  recurrence       RecurrenceRule?
+
+  // Dependency edges this task participates in.
+  blocking     TaskDependency[] @relation("DependencyBlocker") // edges where this task is the blocker
+  blockedBy    TaskDependency[] @relation("DependencyBlocked") // edges where this task is blocked
+
+  @@index([boardId, status])
+  @@index([parentId])
+  @@index([dueAt])
+  @@index([archivedAt])
+}
+
+/// Lightweight checkable item list inside a task (distinct from subtasks-as-tasks).
+model Checklist {
+  id        String   @id @default(cuid())
+  taskId    String
+  name      String   @default("Checklist")
+  order     Float    @default(0)
+  createdAt DateTime @default(now())
+
+  task  Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  items ChecklistItem[]
+
+  @@index([taskId])
+}
+
+model ChecklistItem {
+  id          String   @id @default(cuid())
+  checklistId String
+  content     String
+  done        Boolean  @default(false)
+  order       Float    @default(0)
+  assigneeId  String?
+  createdAt   DateTime @default(now())
+
+  checklist Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  assignee  User?     @relation("ChecklistItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([checklistId])
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String? // accent
+  createdAt DateTime @default(now())
+
+  tasks Task[] @relation("TaskTags")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  taskId    String
+  authorId  String?
+  body      Json // Tiptap document (mentions resolved in Section 12)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task        Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author      User?        @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  attachments Attachment[]
+
+  @@index([taskId])
+}
+
+/// Append-only audit trail. Never updated or deleted by app code.
+model ActivityLog {
+  id        String   @id @default(cuid())
+  taskId    String?
+  boardId   String?
+  actorId   String?
+  type      String // e.g. "status_changed", "assignee_added", "comment_created"
+  data      Json? // structured diff / context
+  createdAt DateTime @default(now())
+
+  task  Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@index([boardId])
+  @@index([createdAt])
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  taskId       String?
+  commentId    String?
+  filename     String
+  path         String // Supabase Storage object key
+  url          String? // public/signed URL if cached
+  mimeType     String?
+  size         Int? // bytes
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  task       Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  comment    Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  uploadedBy User?    @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@index([commentId])
+}
+
+// ---------------------------------------------------------------------------
+// Custom fields
+// ---------------------------------------------------------------------------
+
+/// A custom field defined on a Board (applies to that board's tasks).
+model CustomField {
+  id        String          @id @default(cuid())
+  boardId   String
+  name      String
+  type      CustomFieldType
+  config    Json? // type-specific: dropdown options, rating max, slider min/max, etc.
+  order     Float           @default(0)
+  createdAt DateTime        @default(now())
+
+  board  Board              @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  values CustomFieldValue[]
+
+  @@index([boardId])
+}
+
+model CustomFieldValue {
+  id      String @id @default(cuid())
+  taskId  String
+  fieldId String
+  value   Json? // shape depends on field type
+
+  task  Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  field CustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  // For PEOPLE-type fields: the users referenced. (value JSON also holds ids for portability.)
+  people User[] @relation("CustomFieldPeople")
+
+  @@unique([taskId, fieldId])
+  @@index([fieldId])
+}
+
+// ---------------------------------------------------------------------------
+// Dependencies
+// ---------------------------------------------------------------------------
+
+/// Directed edge: `blocker` must be closed before `blocked` may be marked Done.
+/// "X is waiting on Y" == edge(blocker=Y, blocked=X). "X is blocking Z" == edge(blocker=X, blocked=Z).
+model TaskDependency {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker Task @relation("DependencyBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked Task @relation("DependencyBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+// ---------------------------------------------------------------------------
+// Templates & automation
+// ---------------------------------------------------------------------------
+
+/// Reusable task blueprint. `data` describes the task to materialise.
+model TaskTemplate {
+  id          String   @id @default(cuid())
+  boardId     String? // null => workspace-wide template
+  name        String
+  description String?
+  data        Json // task blueprint (title, description, checklists, fields, ...)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  board     Board? @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([boardId])
+}
+
+/// Build-your-own trigger/condition/action rule. Engine + builder UI in Section 8.
+model AutomationRule {
+  id          String   @id @default(cuid())
+  boardId     String
+  name        String
+  enabled     Boolean  @default(true)
+  trigger     Json // { type, config }
+  conditions  Json     @default("[]") // array of condition clauses
+  actions     Json     @default("[]") // ordered array of actions
+  order       Float    @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  board     Board             @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  createdBy User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  runs      AutomationRunLog[]
+
+  @@index([boardId])
+}
+
+/// Append-only execution audit for automation rules.
+model AutomationRunLog {
+  id        String   @id @default(cuid())
+  ruleId    String
+  taskId    String?
+  status    String // "success" | "skipped" | "error"
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  rule AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Recurrence
+// ---------------------------------------------------------------------------
+
+/// 1:1 with a Task. When the task recurs, a fresh copy is spawned and the old one
+/// leaves the board; the new instance resets to `statusOnRecur` (default TODO).
+model RecurrenceRule {
+  id            String            @id @default(cuid())
+  taskId        String            @unique
+  cadence       Cadence
+  interval      Int               @default(1) // every N cadence units
+  trigger       RecurrenceTrigger @default(ON_STATUS_CHANGE)
+  statusOnRecur Status            @default(TODO)
+  byWeekday     Int[] // 0-6 for WEEKLY (and CUSTOM); empty otherwise
+  byMonthday    Int? // 1-31 for MONTHLY
+  config        Json? // escape hatch for CUSTOM cadences
+  nextRunAt     DateTime? // for ON_SCHEDULE trigger (worker reads this)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([nextRunAt])
+}
+
+// ---------------------------------------------------------------------------
+// Per-board chat
+// ---------------------------------------------------------------------------
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  boardId   String
+  authorId  String?
+  body      String
+  createdAt DateTime @default(now())
+
+  board  Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([boardId, createdAt])
 }
