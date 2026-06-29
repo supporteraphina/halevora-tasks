@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import styles from "./AppShell.module.css";
+import UserMenu from "./UserMenu";
 
 const TABS = [
   { href: "/board", label: "Board" },
@@ -11,8 +12,19 @@ const TABS = [
   { href: "/chat", label: "Chat" },
 ];
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({
+  children,
+  user,
+}: {
+  children: React.ReactNode;
+  user?: { name: string; role: string } | null;
+}) {
   const pathname = usePathname();
+
+  // Auth routes (login) render without the app chrome.
+  if (pathname === "/login" || pathname.startsWith("/login/")) {
+    return <>{children}</>;
+  }
 
   return (
     <div className={styles.shell}>
@@ -44,6 +56,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+        {user ? <UserMenu name={user.name} role={user.role} /> : null}
       </header>
       <main className={styles.main}>{children}</main>
     </div>
