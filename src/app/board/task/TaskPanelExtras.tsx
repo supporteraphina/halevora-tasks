@@ -16,6 +16,8 @@ import {
   addDependencyAction,
   removeDependencyAction,
   searchLinkableTasksAction,
+  setRecurrenceAction,
+  clearRecurrenceAction,
   type DetailActionState,
   type LinkSearchResult,
 } from "./actions";
@@ -909,6 +911,319 @@ function DependencyPicker({
 }
 
 // =====================================================================
+//  Recurrence (recurring-task config — matches the ClickUp picker)
+// =====================================================================
+
+const CADENCE_OPTIONS: { value: string; label: string }[] = [
+  { value: "DAILY", label: "Daily" },
+  { value: "WEEKLY", label: "Weekly" },
+  { value: "MONTHLY", label: "Monthly" },
+  { value: "YEARLY", label: "Yearly" },
+  { value: "CUSTOM", label: "Custom (every N days)" },
+];
+
+const REC_STATUS_OPTIONS: { value: Status; label: string }[] = [
+  { value: "TODO", label: "To Do" },
+  { value: "IN_PROGRESS", label: "In Progress" },
+  { value: "DONE", label: "Done" },
+  { value: "REVIEWED", label: "Reviewed" },
+];
+
+const STATUS_LABEL: Record<Status, string> = {
+  TODO: "To Do",
+  IN_PROGRESS: "In Progress",
+  DONE: "Done",
+  REVIEWED: "Reviewed",
+};
+
+const CADENCE_LABEL: Record<string, string> = {
+  DAILY: "Daily",
+  WEEKLY: "Weekly",
+  MONTHLY: "Monthly",
+  YEARLY: "Yearly",
+  CUSTOM: "Custom",
+};
+
+export function RecurrenceSection({
+  task,
+  timezone,
+}: {
+  task: TaskDetail;
+  timezone: string;
+}) {
+  const { run, pending } = useAction();
+  const rec = task.recurrence;
+  const [editing, setEditing] = useState(false);
+
+  // Form state, seeded from the existing rule or sensible defaults.
+  const [cadence, setCadence] = useState<string>(rec?.cadence ?? "WEEKLY");
+  const [interval, setInterval] = useState<string>(
+    rec ? String(rec.interval) : "1",
+  );
+  const [trigger, setTrigger] = useState<string>(
+    rec?.trigger ?? "ON_STATUS_CHANGE",
+  );
+  const [triggerStatus, setTriggerStatus] = useState<Status>(
+    rec?.triggerStatus ?? "REVIEWED",
+  );
+  const [statusOnRecur, setStatusOnRecur] = useState<Status>(
+    rec?.statusOnRecur ?? "TODO",
+  );
+  const [syncToDueDate, setSyncToDueDate] = useState<boolean>(
+    rec?.syncToDueDate ?? true,
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  function reset() {
+    setCadence(rec?.cadence ?? "WEEKLY");
+    setInterval(rec ? String(rec.interval) : "1");
+    setTrigger(rec?.trigger ?? "ON_STATUS_CHANGE");
+    setTriggerStatus(rec?.triggerStatus ?? "REVIEWED");
+    setStatusOnRecur(rec?.statusOnRecur ?? "TODO");
+    setSyncToDueDate(rec?.syncToDueDate ?? true);
+    setError(null);
+  }
+
+  async function save() {
+    setError(null);
+    const result = await run(setRecurrenceAction, {
+      taskId: task.id,
+      cadence,
+      interval,
+      trigger,
+      triggerStatus,
+      statusOnRecur,
+      syncToDueDate: syncToDueDate ? "true" : "false",
+    });
+    if (result.error) setError(result.error);
+    else setEditing(false);
+  }
+
+  async function remove() {
+    setError(null);
+    await run(clearRecurrenceAction, { taskId: task.id });
+    setEditing(false);
+  }
+
+  // Collapsed summary when a rule exists and we are not editing.
+  if (rec && !editing) {
+    return (
+      <section className={styles.listSection}>
+        <div className={styles.sectionHeader}>
+          <h3 className={styles.sectionTitle}>Recurring</h3>
+          <button
+            type="button"
+            className={styles.addLink}
+            onClick={() => {
+              reset();
+              setEditing(true);
+            }}
+          >
+            Edit
+          </button>
+        </div>
+        <div className={styles.recSummary}>
+          <RepeatIcon />
+          <div className={styles.recSummaryText}>
+            <span className={styles.recSummaryLine}>
+              {CADENCE_LABEL[rec.cadence]}
+              {rec.interval > 1 ? ` (every ${rec.interval})` : ""}
+              {" · "}
+              {rec.trigger === "ON_STATUS_CHANGE"
+                ? `on status change to ${STATUS_LABEL[rec.triggerStatus]}`
+                : "on schedule"}
+            </span>
+            <span className={styles.recSummarySub}>
+              New task resets to {STATUS_LABEL[rec.statusOnRecur]}
+              {rec.syncToDueDate ? " · dates advance" : ""}
+              {rec.trigger === "ON_SCHEDULE" && rec.nextRunAt
+                ? ` · next ${formatInZone(new Date(rec.nextRunAt), timezone)}`
+                : ""}
+            </span>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Editor (also the empty-state "Add recurrence"): matches the screenshot's picker.
+  return (
+    <section className={styles.listSection}>
+      <div className={styles.sectionHeader}>
+        <h3 className={styles.sectionTitle}>Recurring</h3>
+        {!editing ? (
+          <button
+            type="button"
+            className={styles.addLink}
+            onClick={() => {
+              reset();
+              setEditing(true);
+            }}
+          >
+            + Set recurrence
+          </button>
+        ) : null}
+      </div>
+
+      {!editing ? (
+        <p className={styles.emptyHint}>This task does not repeat.</p>
+      ) : (
+        <div className={styles.recCard}>
+          <label className={styles.recField}>
+            <span className={styles.recLabel}>Repeats</span>
+            <select
+              className={styles.cfSelect}
+              value={cadence}
+              disabled={pending}
+              aria-label="Cadence"
+              onChange={(e) => setCadence(e.target.value)}
+            >
+              {CADENCE_OPTIONS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className={styles.recField}>
+            <span className={styles.recLabel}>Every</span>
+            <span className={styles.recInterval}>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                className={styles.recIntervalInput}
+                value={interval}
+                disabled={pending}
+                aria-label="Interval"
+                onChange={(e) => setInterval(e.target.value)}
+              />
+              <span className={styles.recUnit}>{cadenceUnit(cadence, interval)}</span>
+            </span>
+          </label>
+
+          <label className={styles.recField}>
+            <span className={styles.recLabel}>Trigger</span>
+            <select
+              className={styles.cfSelect}
+              value={trigger}
+              disabled={pending}
+              aria-label="Recurrence trigger"
+              onChange={(e) => setTrigger(e.target.value)}
+            >
+              <option value="ON_STATUS_CHANGE">On status change</option>
+              <option value="ON_SCHEDULE">On schedule</option>
+            </select>
+          </label>
+
+          {trigger === "ON_STATUS_CHANGE" ? (
+            <label className={styles.recField}>
+              <span className={styles.recLabel}>When status becomes</span>
+              <select
+                className={styles.cfSelect}
+                value={triggerStatus}
+                disabled={pending}
+                aria-label="Trigger status"
+                onChange={(e) => setTriggerStatus(e.target.value as Status)}
+              >
+                {REC_STATUS_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          <p className={styles.recNote}>
+            <CheckSquare /> Create a new task (the completed one leaves the board)
+          </p>
+
+          <label className={styles.recField}>
+            <span className={styles.recLabel}>Update status to</span>
+            <select
+              className={styles.cfSelect}
+              value={statusOnRecur}
+              disabled={pending}
+              aria-label="Status on recur"
+              onChange={(e) => setStatusOnRecur(e.target.value as Status)}
+            >
+              {REC_STATUS_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className={styles.recCheckRow}>
+            <input
+              type="checkbox"
+              checked={syncToDueDate}
+              disabled={pending}
+              onChange={(e) => setSyncToDueDate(e.target.checked)}
+            />
+            <span>Sync recurrence to due date</span>
+          </label>
+
+          {error ? <p className={styles.fieldError}>{error}</p> : null}
+
+          <div className={styles.recActions}>
+            {rec ? (
+              <button
+                type="button"
+                className={styles.recRemove}
+                disabled={pending}
+                onClick={remove}
+              >
+                Remove
+              </button>
+            ) : null}
+            <span className={styles.recActionsRight}>
+              <button
+                type="button"
+                className={styles.commentCancel}
+                disabled={pending}
+                onClick={() => {
+                  reset();
+                  setEditing(false);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.smallBtn}
+                disabled={pending}
+                onClick={save}
+              >
+                {pending ? "Saving…" : "Save"}
+              </button>
+            </span>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function cadenceUnit(cadence: string, interval: string): string {
+  const n = Number(interval) || 1;
+  const plural = n === 1 ? "" : "s";
+  switch (cadence) {
+    case "WEEKLY":
+      return `week${plural}`;
+    case "MONTHLY":
+      return `month${plural}`;
+    case "YEARLY":
+      return `year${plural}`;
+    default:
+      return `day${plural}`;
+  }
+}
+
+// =====================================================================
 //  Comments + activity feed (combined, newest-first)
 // =====================================================================
 
@@ -1184,6 +1499,30 @@ function LockIcon() {
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <rect x="3.5" y="7" width="9" height="6.5" rx="1" stroke="currentColor" strokeWidth="1.2" />
       <path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function RepeatIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M3 6a4 4 0 016.9-2.2L12 6M13 10a4 4 0 01-6.9 2.2L4 10"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M12 3v3H9M4 13v-3h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CheckSquare() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M4.2 7l2 2 3.6-4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

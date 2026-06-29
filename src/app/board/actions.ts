@@ -6,6 +6,7 @@ import { requireActor } from "@/lib/scope";
 import { taskScopeWhere } from "@/domain/scope";
 import { STATUSES, isClosed, type Status } from "@/domain/status";
 import { openBlockerCount } from "@/domain/dependencies";
+import { maybeRecurOnStatusChange } from "@/lib/recurrenceTrigger";
 import {
   appendOrder,
   orderForMove,
@@ -97,7 +98,7 @@ export async function changeStatusAction(
   if (!taskId) return { error: "Missing task." };
   if (!isStoredStatus(status)) return { error: "Unknown status." };
 
-  const { task } = await findVisibleTask(taskId);
+  const { actor, task } = await findVisibleTask(taskId);
   if (!task) return { error: "Task not found." };
 
   // Done-gate (handoff 06 §6.3), server-enforced on the board path too: refuse closing
@@ -114,7 +115,18 @@ export async function changeStatusAction(
     }
   }
 
-  await prisma.task.update({ where: { id: task.id }, data: { status } });
+  if (task.status !== status) {
+    await prisma.task.update({ where: { id: task.id }, data: { status } });
+    // Inline ON_STATUS_CHANGE recurrence — mirrored from the detail `setStatusAction`,
+    // exactly as the Done-gate was mirrored across both status paths.
+    await maybeRecurOnStatusChange({
+      taskId: task.id,
+      oldStatus: task.status,
+      newStatus: status,
+      actorId: actor.userId,
+      timeZone: actor.timezone,
+    });
+  }
   revalidatePath(BOARD_PATH);
   return { ok: true };
 }

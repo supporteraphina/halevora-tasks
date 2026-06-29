@@ -407,7 +407,9 @@ model RecurrenceRule {
   cadence       Cadence
   interval      Int               @default(1) // every N cadence units
   trigger       RecurrenceTrigger @default(ON_STATUS_CHANGE)
-  statusOnRecur Status            @default(TODO)
+  triggerStatus Status            @default(REVIEWED) // ON_STATUS_CHANGE: the status that fires a recur
+  statusOnRecur Status            @default(TODO) // the spawned copy resets to this (legacy ClickUp)
+  syncToDueDate Boolean           @default(true) // advance start/due by the cadence on recur
   byWeekday     Int[] // 0-6 for WEEKLY (and CUSTOM); empty otherwise
   byMonthday    Int? // 1-31 for MONTHLY
   config        Json? // escape hatch for CUSTOM cadences

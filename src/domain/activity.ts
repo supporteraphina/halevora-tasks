@@ -25,6 +25,8 @@ export const ACTIVITY_TYPES = [
   "custom_field_set",
   "dependency_added",
   "dependency_removed",
+  "recurrence_spawned",
+  "recurrence_closed",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
@@ -109,6 +111,16 @@ export function describeActivity(type: string, data: unknown): string {
       const other = str(d.title) ?? "a task";
       return `removed a dependency link to ${other}`;
     }
+    case "recurrence_spawned": {
+      // Recorded on the OLD instance when it recurs: a fresh copy was created.
+      const cadence = str(d.cadence);
+      return cadence
+        ? `recurred (${cadence.toLowerCase()}) and created a new task`
+        : "recurred and created a new task";
+    }
+    case "recurrence_closed":
+      // Recorded on the NEW instance: it was spawned from a recurring task.
+      return "was created from a recurring task";
     default:
       return "made a change";
   }

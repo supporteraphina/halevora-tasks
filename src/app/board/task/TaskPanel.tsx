@@ -39,6 +39,7 @@ import {
   AttachmentsSection,
   ActivitySection,
   DependenciesSection,
+  RecurrenceSection,
 } from "./TaskPanelExtras";
 import type { TaskDetail, PickerData } from "./data";
 import type { Status, Priority } from "@prisma/client";
@@ -181,6 +182,8 @@ export default function TaskPanel({
           <CustomFieldsSection task={task} picker={picker} isCeo={isCeo} />
 
           <DependenciesSection task={task} />
+
+          <RecurrenceSection task={task} timezone={timezone} />
 
           <AttachmentsSection task={task} />
 

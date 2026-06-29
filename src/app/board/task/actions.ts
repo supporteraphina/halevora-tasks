@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
+import type { Cadence, RecurrenceTrigger } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { requireActor, requireRole } from "@/lib/scope";
 import { taskScopeWhere } from "@/domain/scope";
@@ -22,7 +23,12 @@ import {
   type DepEdge,
 } from "@/domain/dependencies";
 import { isClosed } from "@/domain/status";
+import { nextOccurrence } from "@/domain/recurrence";
 import { recordActivity } from "@/lib/activity";
+import { maybeRecurOnStatusChange } from "@/lib/recurrenceTrigger";
+
+const CADENCES: Cadence[] = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY", "CUSTOM"];
+const TRIGGERS: RecurrenceTrigger[] = ["ON_STATUS_CHANGE", "ON_SCHEDULE"];
 
 const BOARD_PATH = "/board";
 
@@ -122,6 +128,15 @@ export async function setStatusAction(
       actorId: actor.userId,
       type: "status_changed",
       data: { from: task.status, to: status },
+    });
+    // Inline ON_STATUS_CHANGE recurrence (mirrored on the board path too). Runs after the
+    // status write; idempotent and best-effort — never fails the status change.
+    await maybeRecurOnStatusChange({
+      taskId: task.id,
+      oldStatus: task.status,
+      newStatus: status,
+      actorId: actor.userId,
+      timeZone: actor.timezone,
     });
   }
   revalidateTask(task.id);
@@ -1118,4 +1133,99 @@ export async function searchLinkableTasksAction(
       boardName: r.board.name,
     })),
   };
+}
+
+// --- Recurrence -------------------------------------------------------------
+
+function isCadence(v: string): v is Cadence {
+  return (CADENCES as string[]).includes(v);
+}
+function isTrigger(v: string): v is RecurrenceTrigger {
+  return (TRIGGERS as string[]).includes(v);
+}
+
+/**
+ * Create or update a task's recurrence rule (1:1 with the task). Re-authorizes the task via
+ * `findVisibleTask` — a client task id is never trusted. The spawned copy will reset to
+ * `statusOnRecur` (default TODO, configurable — legacy ClickUp behavior). For an ON_SCHEDULE
+ * rule we compute `nextRunAt` as the first occurrence strictly after now, anchored on the
+ * task's due (or start) date, in the actor's timezone; an ON_STATUS_CHANGE rule has no
+ * schedule clock (its `nextRunAt` is null and it fires inline on the status path).
+ */
+export async function setRecurrenceAction(
+  _prev: DetailActionState,
+  formData: FormData,
+): Promise<DetailActionState> {
+  const taskId = String(formData.get("taskId") ?? "");
+  const cadence = String(formData.get("cadence") ?? "");
+  const trigger = String(formData.get("trigger") ?? "");
+  const triggerStatus = String(formData.get("triggerStatus") ?? "");
+  const statusOnRecur = String(formData.get("statusOnRecur") ?? "");
+  const syncToDueDate = String(formData.get("syncToDueDate") ?? "") === "true";
+  const intervalRaw = String(formData.get("interval") ?? "1");
+
+  if (!taskId) return { error: "Missing task." };
+  if (!isCadence(cadence)) return { error: "Unknown cadence." };
+  if (!isTrigger(trigger)) return { error: "Unknown trigger." };
+  if (!isStoredStatus(triggerStatus)) return { error: "Unknown trigger status." };
+  if (!isStoredStatus(statusOnRecur)) return { error: "Unknown recur status." };
+
+  const interval = Math.trunc(Number(intervalRaw));
+  if (!Number.isFinite(interval) || interval < 1 || interval > 365) {
+    return { error: "Interval must be between 1 and 365." };
+  }
+
+  const { actor, task } = await findVisibleTask(taskId);
+  if (!task) return { error: "Task not found." };
+
+  // ON_SCHEDULE needs a clock: first occurrence strictly after now, anchored on due/start.
+  let nextRunAt: Date | null = null;
+  if (trigger === "ON_SCHEDULE") {
+    const now = new Date();
+    const anchor = task.dueAt ?? task.startAt ?? now;
+    nextRunAt = nextOccurrence(anchor, now, { cadence, interval }, actor.timezone);
+  }
+
+  await prisma.recurrenceRule.upsert({
+    where: { taskId: task.id },
+    create: {
+      taskId: task.id,
+      cadence,
+      interval,
+      trigger,
+      triggerStatus,
+      statusOnRecur,
+      syncToDueDate,
+      nextRunAt,
+    },
+    update: {
+      cadence,
+      interval,
+      trigger,
+      triggerStatus,
+      statusOnRecur,
+      syncToDueDate,
+      nextRunAt,
+    },
+  });
+
+  revalidateTask(task.id);
+  return { ok: true };
+}
+
+/** Remove a task's recurrence rule — the task stops recurring. Re-authorizes the task. */
+export async function clearRecurrenceAction(
+  _prev: DetailActionState,
+  formData: FormData,
+): Promise<DetailActionState> {
+  const taskId = String(formData.get("taskId") ?? "");
+  if (!taskId) return { error: "Missing task." };
+
+  const { task } = await findVisibleTask(taskId);
+  if (!task) return { error: "Task not found." };
+
+  // deleteMany is a no-op (not an error) when no rule exists — keeps the action idempotent.
+  await prisma.recurrenceRule.deleteMany({ where: { taskId: task.id } });
+  revalidateTask(task.id);
+  return { ok: true };
 }

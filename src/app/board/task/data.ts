@@ -16,7 +16,13 @@ import { taskScopeWhere } from "@/domain/scope";
 import { openBlockerCount } from "@/domain/dependencies";
 import { currentActor } from "@/lib/scope";
 import { storageEnabled } from "@/lib/storage";
-import type { Status, Priority, CustomFieldType } from "@prisma/client";
+import type {
+  Status,
+  Priority,
+  CustomFieldType,
+  Cadence,
+  RecurrenceTrigger,
+} from "@prisma/client";
 
 export interface DetailAssignee {
   id: string;
@@ -93,6 +99,17 @@ export interface DetailDependency {
   boardName: string;
 }
 
+/** The task's recurrence config, or null when the task does not recur. */
+export interface DetailRecurrence {
+  cadence: Cadence;
+  interval: number;
+  trigger: RecurrenceTrigger;
+  triggerStatus: Status;
+  statusOnRecur: Status;
+  syncToDueDate: boolean;
+  nextRunAt: Date | null;
+}
+
 export interface TaskDetail {
   id: string;
   boardId: string;
@@ -119,6 +136,8 @@ export interface TaskDetail {
   blocking: DetailDependency[];
   // Count of `waitingOn` blockers that are still open — drives the Done-gate hint.
   openBlockerCount: number;
+  // The recurrence config, or null when the task does not recur.
+  recurrence: DetailRecurrence | null;
 }
 
 /** Everyone in the workspace — for the assignee + tag pickers. Names are not task content. */
@@ -227,6 +246,17 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetail | null>
               board: { select: { name: true } },
             },
           },
+        },
+      },
+      recurrence: {
+        select: {
+          cadence: true,
+          interval: true,
+          trigger: true,
+          triggerStatus: true,
+          statusOnRecur: true,
+          syncToDueDate: true,
+          nextRunAt: true,
         },
       },
     },
@@ -357,6 +387,17 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetail | null>
     waitingOn,
     blocking: blockingList,
     openBlockerCount: openCount,
+    recurrence: task.recurrence
+      ? {
+          cadence: task.recurrence.cadence,
+          interval: task.recurrence.interval,
+          trigger: task.recurrence.trigger,
+          triggerStatus: task.recurrence.triggerStatus,
+          statusOnRecur: task.recurrence.statusOnRecur,
+          syncToDueDate: task.recurrence.syncToDueDate,
+          nextRunAt: task.recurrence.nextRunAt,
+        }
+      : null,
   };
 }
 

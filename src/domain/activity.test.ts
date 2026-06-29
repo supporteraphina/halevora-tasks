@@ -20,6 +20,8 @@ describe("ACTIVITY_TYPES", () => {
       "custom_field_set",
       "dependency_added",
       "dependency_removed",
+      "recurrence_spawned",
+      "recurrence_closed",
     ];
     for (const t of expected) expect(ACTIVITY_TYPES).toContain(t);
   });
@@ -88,6 +90,18 @@ describe("describeActivity", () => {
     expect(
       describeActivity("dependency_removed", { title: "Design" }),
     ).toBe("removed a dependency link to Design");
+  });
+
+  it("renders a recurrence spawn with and without a cadence", () => {
+    expect(
+      describeActivity("recurrence_spawned", { cadence: "WEEKLY" }),
+    ).toBe("recurred (weekly) and created a new task");
+    expect(describeActivity("recurrence_spawned", {})).toBe(
+      "recurred and created a new task",
+    );
+    expect(describeActivity("recurrence_closed", {})).toBe(
+      "was created from a recurring task",
+    );
   });
 
   it("falls back to a readable label for an unknown payload", () => {
