@@ -1,38 +1,69 @@
-import styles from "@/components/page.module.css";
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { currentActor } from "@/lib/scope";
+import { loadBoard } from "./data";
+import Board from "./Board";
+import styles from "./board.module.css";
 
-export default function BoardPage() {
+export const metadata: Metadata = {
+  title: "Board — Halevora Tasks",
+};
+
+// Always reflect the latest data (drag/move/status writes revalidate this path).
+export const dynamic = "force-dynamic";
+
+export default async function BoardPage() {
+  const actor = await currentActor();
+  if (!actor) redirect("/login");
+
+  const board = await loadBoard();
+
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>Board</h1>
-        <p className={styles.subtitle}>Your columns of work.</p>
-      </header>
-      <section className={styles.empty} aria-label="Empty board">
-        <span className={styles.emptyIcon} aria-hidden="true">
-          <svg
-            width="40"
-            height="40"
-            viewBox="0 0 40 40"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <rect x="4" y="6" width="9" height="28" rx="2" />
-            <rect x="15.5" y="6" width="9" height="20" rx="2" />
-            <rect x="27" y="6" width="9" height="24" rx="2" />
-          </svg>
+      <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+        <span className={styles.crumb}>Team Space</span>
+        <span className={styles.crumbSep} aria-hidden="true">
+          /
         </span>
-        <h2 className={styles.emptyTitle}>No boards yet</h2>
-        <p className={styles.emptyText}>
-          Boards are your columns of work, like Innovations or Client success.
-          Create one to start adding tasks.
-        </p>
-        <div className={styles.actions}>
-          <button type="button" className={styles.primaryBtn}>
-            New board
-          </button>
-        </div>
-      </section>
+        <span className={styles.crumbCurrent}>{board.workspaceName}</span>
+      </nav>
+
+      <div className={styles.body}>
+        <aside className={styles.rail} aria-label="Projects">
+          <p className={styles.railHeading}>Projects</p>
+          <ul className={styles.railList}>
+            {board.projects.map((p) => (
+              <li
+                key={p.id}
+                className={styles.railItem}
+                data-active={p.name === board.projectName || undefined}
+              >
+                <span className={styles.railIcon} aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <rect
+                      x="1.5"
+                      y="2.5"
+                      width="11"
+                      height="9"
+                      rx="1.5"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                    />
+                    <path
+                      d="M1.5 5.5h11"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                    />
+                  </svg>
+                </span>
+                {p.name}
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        <Board columns={board.columns} />
+      </div>
     </div>
   );
 }

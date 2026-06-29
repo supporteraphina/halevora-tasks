@@ -108,47 +108,64 @@ task-scoping helper, route protection, and a CEO-only user-management surface.
   call keeps it server-bound in practice. Add the dep if you want a hard compile-time guard.
 
 ## 6. NEXT SECTION (Section 3): Board view / Kanban core
-**Goal:** the real Board — status columns of task cards for a selected board, with status badges,
-**derived** Overdue, create-task, move-between-columns, and **persisted drag-reorder** within a
-column. Plus the workspace breadcrumb ("Team Space / Halevora") + a left project/board selector.
-All Task reads scoped by the current user (CEO all; MEMBER only assigned).
 
-**Entry point:** replace `src/app/board/page.tsx` (server component) — fetch the workspace →
-project → boards, and the selected board's top-level tasks
-(`parentId: null`, `archivedAt: null`) **scoped** via
-`{ AND: [ await taskWhereForCurrentUser(), { boardId, parentId: null, archivedAt: null } ] }`.
-Group by `status` using `STATUSES` from `src/domain/status.ts`.
+> **CORRECTED MODEL (verified against the source screenshots `C:\Users\david\Downloads\Noel`).**
+> The board is **BOARDS-AS-COLUMNS**, not status-as-columns. Each user-created **Board**
+> (Innovations · Client success · Lucky Phone Farm · Meta Ads …) is a vertical **column**;
+> **Tasks are the cards** inside their board's column. **Status is a per-card BADGE**, not a
+> column. There is NO `?board=` single-board selector — every board in the project shows at
+> once as a column, columns scroll horizontally. (00-START-HERE §3 "Board = a column/section
+> you create" and §5 "Boards-as-columns" are authoritative.)
+
+**Goal:** the real Board — the project's boards rendered as horizontally-scrolling columns of
+task cards, each card showing a **status badge**, priority, assignee avatars, due date with
+**derived** Overdue treatment, and a subtask count. Create a task into a column ("+ Add Task"),
+change a card's status via a grouped status dropdown, **move a card to another board column**
+(updates `boardId`), and **persisted drag-reorder within a column** (`order` Float). Workspace
+breadcrumb ("Team Space / Halevora") + a left Projects rail. All Task reads scoped by the
+current user (CEO all; MEMBER only assigned).
+
+**Entry point:** replace `src/app/board/page.tsx` (server component). Fetch the workspace →
+project → its boards (ordered by `Board.order`, `archivedAt: null`); for each board fetch its
+**scoped** top-level cards:
+`{ AND: [ await taskWhereForCurrentUser(), { boardId, parentId: null, archivedAt: null } ] }`,
+ordered by `Task.order`. Exclude REVIEWED from the board grid (it lives in the Reviewed view, §9).
+
+**Card status badge — the four stored statuses + a derived OVERDUE display (from the screenshots):**
+the badge text is `OVERDUE` (red) when `isOverdue(task, now)`, otherwise the stored status
+(`TO DO` gray · `IN PROGRESS` blue · `DONE` green). The status dropdown is grouped exactly like
+ClickUp: **Not started** (To Do) · **Active** (In Progress) · **Done** (Done) · **Closed**
+(Reviewed). OVERDUE is never a stored value — selecting a status writes TODO/IN_PROGRESS/DONE/
+REVIEWED only. Marking a card REVIEWED removes it from the board grid.
 
 **First 3 steps:**
-1. Read `src/lib/scope.ts`, `src/domain/status.ts`, `prisma/schema.prisma` (Task/Board ordering:
-   `order` is a Float per `(board,status)` column). Build a server data loader that returns the
-   board list + the selected board's scoped tasks grouped into the four status columns, deriving
-   Overdue with `isOverdue(task, new Date())` (never store it). Add a `?board=<id>` selector
-   (default the first board) + the "Team Space / Halevora" breadcrumb.
-2. Render columns + cards (CSS modules + tokens; dark theme; reuse the card/badge styling idiom
-   from `page.module.css`/`admin.module.css`). Card shows title, status badge, priority dot,
-   assignee avatars, due date with the Overdue treatment (use `--status-overdue*`,
-   `--prio-*`, `--status-*` tokens). Add "New task" (create with default `status: TODO`,
-   `order` = max+1 in the target column) via a server action; keep create idiomatic with
-   `useActionState` like the login/admin forms.
-3. Implement move + persisted drag-reorder: a server action that updates a task's `status`
-   and/or `order` (fractional/midpoint ordering between neighbors so reorders are O(1) writes).
-   Authorize every mutation server-side — a MEMBER may only move a task they can see
-   (`canSeeTask` / re-query under scope); never trust the task id from the client.
+1. Read `src/lib/scope.ts`, `src/domain/status.ts` (`STATUSES`, `isOverdue`, `isClosed`),
+   `src/domain/priority.ts`, `prisma/schema.prisma` (Task/Board `order` Float). Build a server
+   data loader returning the project's boards each with its scoped cards (assignees + subtask
+   count included), deriving Overdue at render with `isOverdue(task, new Date())` (never store
+   it). Add the "Team Space / Halevora" breadcrumb + Projects rail.
+2. Render boards-as-columns (CSS modules + `src/styles/tokens.css`; dark theme; match the
+   screenshots: column header = color dot + board name + count; card = title, status badge,
+   priority, assignee avatars, due date w/ Overdue red treatment, "N subtasks"). Each column has
+   a "+ Add Task" that creates a task in that board (default `status: TODO`, `order` = max+1 in
+   that column) via a server action, idiomatic `useActionState` like the login/admin forms.
+3. Implement the status dropdown (grouped) + move/drag: server actions that update a card's
+   `status`, its `boardId` (move to another column), and/or `order` (midpoint between neighbors
+   so reorders are O(1) writes). **Authorize every mutation server-side** — re-query the task
+   under scope / `canSeeTask` before mutating; never trust a task id from the client.
 
 **Gotchas:**
-- **Scoping on every read** — board, card includes (assignees/subtasks), and any count. Compose
-  `taskWhereForCurrentUser()`; do not hand-roll a second visibility rule.
-- **Overdue is DERIVED**, not a column and not a stored status. Compute at render with
-  `isOverdue`. The ClickUp status menu *groups* OVERDUE under "Not started" visually, but the
-  stored `status` stays TODO/IN_PROGRESS.
-- **REVIEWED leaves the board** into a separate Reviewed view (§9) — render the four columns but
-  treat REVIEWED tasks as off the active board (or a collapsed/last column per the screenshots);
-  confirm against `C:\Users\david\Downloads\Noel`.
-- Subtasks are Tasks — filter `parentId: null` for the board grid; a subtask is visible per its
-  **own** assignees (consistent with `taskScopeWhere`).
-- `order` is a Float for cheap reordering — pick midpoints; plan an occasional renormalize if
-  values collide. Persist on drop, not on hover.
-- Run `halevora-permissions-audit` (it now has a real surface to audit) and `halevora-qa-gate`
-  before writing the Section 4 handoff. Browser-smoke the board with the chrome-devtools MCP,
-  including a second MEMBER account to prove a member can't see another member's task.
+- **Scoping on every read** — every column's cards, includes (assignees/subtasks), counts.
+  Compose `taskWhereForCurrentUser()`; do not hand-roll a second visibility rule.
+- **Overdue is DERIVED**, never a column or stored status — compute with `isOverdue` at render.
+- **Columns are Boards, status is a badge.** Do not build status columns or a single-board
+  selector. Moving a card across columns changes `boardId`; reordering changes `order`.
+- **REVIEWED leaves the board** — exclude it from the grid (Reviewed view is §9).
+- Subtasks are Tasks — filter `parentId: null` for the grid; show only the subtask *count* on
+  the card (the detail panel in §4 lists them). A subtask is visible per its **own** assignees.
+- `order` is a Float — pick midpoints; plan an occasional renormalize if values collide. Persist
+  on drop, not on hover. Board columns also have `Board.order` for left-to-right ordering.
+- Consult the screenshots in `C:\Users\david\Downloads\Noel` for exact card/column layout.
+- Run `halevora-permissions-audit` (real surface now) and `halevora-qa-gate` before the Section 4
+  handoff. Browser-smoke the board with chrome-devtools, including a second MEMBER account to
+  prove a member can't see another member's task.
