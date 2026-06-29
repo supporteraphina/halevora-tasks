@@ -8,6 +8,7 @@ import { STATUSES, isClosed, type Status } from "@/domain/status";
 import { openBlockerCount } from "@/domain/dependencies";
 import { maybeRecurOnStatusChange } from "@/lib/recurrenceTrigger";
 import { onStatusChanged } from "@/lib/automationTrigger";
+import { publishTaskEvent } from "@/lib/realtime";
 import {
   appendOrder,
   orderForMove,
@@ -70,7 +71,7 @@ export async function createTaskAction(
     _max: { order: true },
   });
 
-  await prisma.task.create({
+  const created = await prisma.task.create({
     data: {
       boardId,
       title,
@@ -80,8 +81,11 @@ export async function createTaskAction(
       // The creator is assigned by default so a MEMBER can see the card they just made.
       assignees: { connect: { id: actor.userId } },
     },
+    select: { id: true },
   });
 
+  // Live board: announce the new card (ids only — the relay re-authorizes per subscriber).
+  await publishTaskEvent(boardId, created.id);
   revalidatePath(BOARD_PATH);
   return { ok: true };
 }
@@ -135,6 +139,8 @@ export async function changeStatusAction(
       from: task.status,
       to: status,
     });
+    // Live board: announce the status change.
+    await publishTaskEvent(task.boardId, task.id);
   }
   revalidatePath(BOARD_PATH);
   return { ok: true };
@@ -159,6 +165,7 @@ export async function moveCardAction(
 
   const { task } = await findVisibleTask(taskId);
   if (!task) return { error: "Task not found." };
+  const fromBoardId = task.boardId;
 
   const destBoard = await prisma.board.findFirst({
     where: { id: toBoardId, archivedAt: null },
@@ -215,6 +222,10 @@ export async function moveCardAction(
     });
   }
 
+  // Live board: announce on BOTH the source and destination boards so viewers of either
+  // refresh (a cross-board move removes the card from one column and adds it to another).
+  await publishTaskEvent(toBoardId, task.id);
+  if (fromBoardId !== toBoardId) await publishTaskEvent(fromBoardId, task.id);
   revalidatePath(BOARD_PATH);
   return { ok: true };
 }

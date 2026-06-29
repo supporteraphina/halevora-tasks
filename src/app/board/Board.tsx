@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect } from "react";
+import { useState, useTransition, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useRealtime } from "@/components/useRealtime";
 import {
   createTaskAction,
   changeStatusAction,
@@ -75,6 +76,16 @@ export default function Board({
   } | null>(null);
   // Multi-select state across all columns.
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Live board: subscribe to every visible board column. A task event (create/move/status/
+  // bulk/detail change) for a board the viewer can see prompts a server refresh — the SSE
+  // relay has already authorized the event per subscriber, so a member never gets a refresh
+  // signal for a task they can't see. Realtime is additive: if the stream drops, manual
+  // reload still works.
+  const boardIds = useMemo(() => columns.map((c) => c.id), [columns]);
+  useRealtime(boardIds, (event) => {
+    if (event.type === "task") router.refresh();
+  });
 
   const now = new Date();
 

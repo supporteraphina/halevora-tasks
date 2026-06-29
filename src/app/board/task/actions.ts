@@ -25,6 +25,7 @@ import {
 import { isClosed } from "@/domain/status";
 import { nextOccurrence } from "@/domain/recurrence";
 import { recordActivity } from "@/lib/activity";
+import { publishTaskEvent } from "@/lib/realtime";
 import { maybeRecurOnStatusChange } from "@/lib/recurrenceTrigger";
 import {
   onStatusChanged,
@@ -79,6 +80,16 @@ async function findVisibleTask(taskId: string) {
 function revalidateTask(taskId: string) {
   revalidatePath(BOARD_PATH);
   revalidatePath(`/board/task/${taskId}`);
+}
+
+/**
+ * Revalidate AND push a live `task` event for a board-visible change (status, priority,
+ * assignee, dates, title, subtasks). The NOTIFY carries ids only; the SSE relay re-authorizes
+ * per subscriber, so this is safe to emit board-wide. Best-effort — never fails the mutation.
+ */
+async function revalidateAndPublishTask(taskId: string, boardId: string) {
+  revalidateTask(taskId);
+  await publishTaskEvent(boardId, taskId);
 }
 
 /**
@@ -154,7 +165,7 @@ export async function setStatusAction(
       to: status,
     });
   }
-  revalidateTask(task.id);
+  await revalidateAndPublishTask(task.id, task.boardId);
   return { ok: true };
 }
 
@@ -190,7 +201,7 @@ export async function setPriorityAction(
       to: priority,
     });
   }
-  revalidateTask(task.id);
+  await revalidateAndPublishTask(task.id, task.boardId);
   return { ok: true };
 }
 
@@ -245,7 +256,9 @@ export async function toggleAssigneeAction(
     actorId: actor.userId,
     userId,
   });
-  revalidateTask(task.id);
+  // Live board: assignee changes alter who can SEE the card — push so viewers re-fetch
+  // (each subscriber is re-authorized, so a member who just lost access stops getting it).
+  await revalidateAndPublishTask(task.id, task.boardId);
   return { ok: true };
 }
 
@@ -305,7 +318,7 @@ export async function setDateAction(
       actorId: actor.userId,
     });
   }
-  revalidateTask(task.id);
+  await revalidateAndPublishTask(task.id, task.boardId);
   return { ok: true };
 }
 
@@ -653,7 +666,7 @@ export async function renameTaskAction(
   if (!task) return { error: "Task not found." };
 
   await prisma.task.update({ where: { id: task.id }, data: { title } });
-  revalidateTask(task.id);
+  await revalidateAndPublishTask(task.id, task.boardId);
   return { ok: true };
 }
 

@@ -14,6 +14,7 @@ import {
   type BulkResult,
 } from "@/domain/bulk";
 import { recordActivity } from "@/lib/activity";
+import { publishTaskEvent } from "@/lib/realtime";
 import { maybeRecurOnStatusChange } from "@/lib/recurrenceTrigger";
 import {
   onStatusChanged,
@@ -125,6 +126,7 @@ export async function bulkSetStatusAction(
       from: task.status,
       to: status as Status,
     });
+    await publishTaskEvent(task.boardId, task.id);
     result.updated++;
   }
 
@@ -174,6 +176,7 @@ export async function bulkSetPriorityAction(
       from: task.priority,
       to: priority,
     });
+    await publishTaskEvent(task.boardId, task.id);
   }
 
   revalidateAll();
@@ -235,6 +238,7 @@ export async function bulkToggleAssigneeAction(
         userId,
       });
     }
+    await publishTaskEvent(task.boardId, task.id);
   }
 
   revalidateAll();
@@ -300,6 +304,7 @@ export async function bulkToggleTagAction(
         tagName: tag.name,
       });
     }
+    await publishTaskEvent(task.boardId, task.id);
   }
 
   revalidateAll();
@@ -338,6 +343,8 @@ export async function bulkArchiveAction(
       type: "bulk_updated",
       data: { field: "archived" },
     });
+    // Live board: the card leaves every view; tell viewers of its board to refresh.
+    await publishTaskEvent(task.boardId, task.id);
   }
 
   revalidateAll();
