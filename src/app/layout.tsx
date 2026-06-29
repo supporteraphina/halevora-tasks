@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "../styles/tokens.css";
 import "../styles/globals.css";
 import AppShell from "@/components/AppShell";
 import { auth } from "@/auth";
 import { currentActor } from "@/lib/scope";
 import { countUnread } from "@/lib/notificationsData";
+
+// Modern, confident, highly legible. Exposed as --font-inter (see tokens.css --font-sans).
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Halevora Tasks",
@@ -26,7 +34,7 @@ export default async function RootLayout({
   const unread = actor ? await countUnread(actor) : 0;
 
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <body>
         <AppShell user={user} userId={actor?.userId ?? null} initialUnread={unread}>
           {children}

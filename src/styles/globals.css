@@ -1,5 +1,5 @@
 /*
- * Halevora Tasks — base styles. Tokens live in tokens.css.
+ * Halevora Tasks — base styles + motion library. Tokens live in tokens.css.
  * Everything here reads CSS variables; no hard-coded colors.
  */
 
@@ -20,7 +20,9 @@ body {
   font-family: var(--font-sans);
   font-size: var(--fs-base);
   line-height: var(--lh-normal);
+  font-feature-settings: "cv11", "ss01"; /* Inter: open digits + alt letterforms */
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
@@ -33,6 +35,7 @@ h6 {
   margin: 0;
   font-weight: var(--fw-semibold);
   line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
   text-wrap: balance;
   color: var(--ink);
 }
@@ -47,8 +50,9 @@ p {
 }
 
 a {
-  color: var(--primary);
+  color: var(--primary-strong);
   text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
 }
 
 a:hover {
@@ -59,6 +63,7 @@ a:hover {
 button {
   font: inherit;
   cursor: pointer;
+  letter-spacing: var(--tracking-snug);
 }
 
 :focus-visible {
@@ -67,12 +72,137 @@ button {
   border-radius: var(--radius-sm);
 }
 
-/* Respect reduced-motion globally; component animations add their own fallbacks. */
+/* ---- Themed scrollbars (thin, recede until needed) ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-subtle);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+::selection {
+  background: var(--primary-weak);
+  color: var(--ink);
+}
+
+/* =========================================================================
+ * Motion library — calm, fast, expensive. Transform/opacity only.
+ * Every animation runs on mount and ends at the visible default, so the
+ * reduced-motion rule (which collapses durations) leaves content fully shown.
+ * ========================================================================= */
+
+@keyframes hv-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes hv-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes hv-rise-sm {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes hv-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes hv-drawer-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes hv-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes hv-check-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Page content entrance (applied to the routed content wrapper, keyed by path). */
+.hv-page {
+  animation: hv-rise var(--dur-slow) var(--ease-out) both;
+}
+
+/* Staggered reveal: parent sets the rhythm; children inherit an incremental delay.
+   Usage: add class .hv-stagger to a container, .hv-stagger-item to its children. */
+.hv-stagger-item {
+  animation: hv-rise var(--dur-slow) var(--ease-out) both;
+  animation-delay: calc(var(--stagger-i, 0) * 38ms);
+}
+
+/* Hover lift for interactive cards/rows. Pair with a resting shadow on the element. */
+.hv-lift {
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.hv-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.hv-lift:active {
+  transform: translateY(0);
+  transition-duration: var(--dur-instant);
+}
+
+/* Menu / popover / dropdown entrance. */
+.hv-pop-in {
+  animation: hv-pop var(--dur-base) var(--ease-spring) both;
+  transform-origin: top;
+}
+
+/* Modal panel + backdrop. */
+.hv-modal-in {
+  animation: hv-pop var(--dur-base) var(--ease-spring) both;
+}
+.hv-drawer { animation: hv-drawer-in var(--dur-slow) var(--ease-out) both; }
+.hv-scrim { animation: hv-scrim-in var(--dur-base) var(--ease-out) both; }
+
+/* Task-completion / confirmation feedback. */
+.hv-confirm { animation: hv-check-pop var(--dur-base) var(--ease-spring) both; }
+
+/* View Transitions API: a calm crossfade between routes where supported. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: var(--dur-base);
+    animation-timing-function: var(--ease-out);
+  }
+}
+
+/* Respect reduced-motion globally; the rule collapses durations so every
+ * on-mount animation lands instantly on its visible end state. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
