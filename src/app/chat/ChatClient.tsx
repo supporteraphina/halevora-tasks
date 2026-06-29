@@ -163,7 +163,7 @@ export default function ChatClient({
         <div className={styles.emptyState}>
           <h1 className={styles.emptyTitle}>No boards yet</h1>
           <p className={styles.emptyNote}>
-            Board chat appears once you have tasks on a board you can see.
+            Each board has its own chat. Once you can see a board with tasks, its chat opens here.
           </p>
         </div>
       </div>
@@ -283,7 +283,7 @@ export default function ChatClient({
               ref={textareaRef}
               className={styles.input}
               value={draft}
-              placeholder={`Message ${activeBoard?.name ?? ""} — @ to mention`}
+              placeholder={`Message ${activeBoard?.name ?? ""}. Type @ to mention`}
               rows={1}
               disabled={pending || !activeBoardId}
               onChange={(e) => onDraftChange(e.target.value)}

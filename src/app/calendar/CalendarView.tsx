@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   dayKey,
@@ -52,8 +52,16 @@ export default function CalendarView({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const now = useMemo(() => new Date(), []);
   const todayKey = dayKey(today);
+
+  // Auto-clear a reschedule error after a few seconds.
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 4000);
+    return () => clearTimeout(t);
+  }, [error]);
 
   // Bucket tasks by their local due-day key for O(1) cell lookup.
   const byDay = useMemo(() => {
@@ -77,7 +85,8 @@ export default function CalendarView({
       setPending(false);
       setDragId(null);
       setDropKey(null);
-      if (!res.error) router.refresh();
+      if (res.error) setError(res.error);
+      else router.refresh();
     });
   }
 
@@ -190,32 +199,38 @@ export default function CalendarView({
                 {dayTasks.map((t) => {
                   const badge = badgeFor(t, now);
                   return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={styles.event}
-                      data-tone={BADGE_VARS[badge.key]}
-                      data-dragging={dragId === t.id || undefined}
-                      draggable
-                      title={`${t.title} — ${t.boardName}`}
-                      onClick={() => router.push(`/board/task/${t.id}`)}
-                      onDragStart={(e) => {
-                        e.dataTransfer.effectAllowed = "move";
-                        e.dataTransfer.setData("text/plain", t.id);
-                        setDragId(t.id);
-                      }}
-                      onDragEnd={() => {
-                        setDragId(null);
-                        setDropKey(null);
-                      }}
-                    >
-                      <span
-                        className={styles.eventDot}
+                    <div key={t.id} className={styles.eventRow}>
+                      <button
+                        type="button"
+                        className={styles.event}
                         data-tone={BADGE_VARS[badge.key]}
-                        aria-hidden="true"
+                        data-dragging={dragId === t.id || undefined}
+                        draggable
+                        title={`${t.title} — ${t.boardName}`}
+                        onClick={() => router.push(`/board/task/${t.id}`)}
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", t.id);
+                          setDragId(t.id);
+                        }}
+                        onDragEnd={() => {
+                          setDragId(null);
+                          setDropKey(null);
+                        }}
+                      >
+                        <span
+                          className={styles.eventDot}
+                          data-tone={BADGE_VARS[badge.key]}
+                          aria-hidden="true"
+                        />
+                        <span className={styles.eventTitle}>{t.title}</span>
+                      </button>
+                      <RescheduleControl
+                        title={t.title}
+                        currentKey={t.dueKey}
+                        onPick={(key) => reschedule(t.id, key)}
                       />
-                      <span className={styles.eventTitle}>{t.title}</span>
-                    </button>
+                    </div>
                   );
                 })}
                 {dayTasks.length === 0 && mode === "day" && (
@@ -228,8 +243,98 @@ export default function CalendarView({
       </div>
 
       <p className={styles.hint}>
-        Drag a task onto another day to reschedule its due date.
+        Drag a task onto another day to reschedule it, or use the date control on a task to pick a
+        day with the keyboard.
       </p>
+
+      {error ? (
+        <div className={styles.errorToast} role="alert">
+          {error}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Keyboard-accessible reschedule: a small date trigger next to each task that opens a native
+ * date input. Drag-and-drop has no keyboard path, so this is the a11y route to change a due
+ * date. The picked YYYY-MM-DD goes through the same scoped, re-authorized server action.
+ */
+function RescheduleControl({
+  title,
+  currentKey,
+  onPick,
+}: {
+  title: string;
+  currentKey: string;
+  onPick: (key: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+        btnRef.current?.focus();
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+
+  return (
+    <div className={styles.reschedWrap} ref={ref}>
+      <button
+        ref={btnRef}
+        type="button"
+        className={styles.reschedBtn}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`Reschedule "${title}"`}
+        title="Reschedule…"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <rect x="1.5" y="2.5" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M1.5 5.5h11M4.5 1v2M9.5 1v2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      </button>
+      {open ? (
+        <div className={styles.reschedMenu} role="dialog" aria-label={`Reschedule ${title}`}>
+          <label className={styles.reschedLabel}>
+            New due date
+            <input
+              ref={inputRef}
+              type="date"
+              className={styles.reschedInput}
+              defaultValue={currentKey}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value) {
+                  setOpen(false);
+                  onPick(value);
+                }
+              }}
+            />
+          </label>
+        </div>
+      ) : null}
     </div>
   );
 }

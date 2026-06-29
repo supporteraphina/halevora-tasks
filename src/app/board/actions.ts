@@ -42,6 +42,61 @@ async function findVisibleTask(taskId: string) {
   return { actor, task };
 }
 
+/** A small fixed palette for new board accent dots, cycled by board count. */
+const BOARD_COLORS = ["#7C5CFF", "#22C55E", "#F59E0B", "#EF4444", "#3B82F6", "#EC4899"];
+
+/**
+ * Create a new board (column) in the workspace's first project. Any signed-in user may create
+ * one (creating a column is not a per-task READ, so it isn't scoped); we still re-authorize the
+ * actor and resolve the project server-side rather than trusting a client-supplied id. If no
+ * project exists yet, a default one is created so the very first board has a home.
+ */
+export async function createBoardAction(
+  _prev: BoardActionState,
+  formData: FormData,
+): Promise<BoardActionState> {
+  await requireActor();
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (name.length === 0) return { error: "Board name is required." };
+  if (name.length > 120) return { error: "Board name is too long." };
+
+  // Resolve the first project of the first workspace (mirrors the board loader's selection).
+  const workspace = await prisma.workspace.findFirst({
+    orderBy: { createdAt: "asc" },
+    select: { id: true, projects: { orderBy: { order: "asc" }, take: 1, select: { id: true } } },
+  });
+  if (!workspace) return { error: "No workspace exists yet." };
+
+  let projectId = workspace.projects[0]?.id;
+  if (!projectId) {
+    const project = await prisma.project.create({
+      data: { workspaceId: workspace.id, name: "Halevora", order: 0 },
+      select: { id: true },
+    });
+    projectId = project.id;
+  }
+
+  const agg = await prisma.board.aggregate({
+    where: { projectId },
+    _max: { order: true },
+    _count: true,
+  });
+
+  await prisma.board.create({
+    data: {
+      projectId,
+      name,
+      color: BOARD_COLORS[agg._count % BOARD_COLORS.length],
+      order: appendOrder(agg._max.order),
+    },
+    select: { id: true },
+  });
+
+  revalidatePath(BOARD_PATH);
+  return { ok: true };
+}
+
 /**
  * Create a task into a board column. Default status TODO; order = max+1 in that column.
  * Any signed-in user may create (scoping is on READ); we still verify the board exists.

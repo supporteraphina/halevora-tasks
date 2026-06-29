@@ -221,6 +221,23 @@
   color: var(--danger);
 }
 
+/* Panel-level action error toast (a refused mutation surfaces here instead of vanishing). */
+.actionErrorToast {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  max-width: calc(100% - var(--space-5));
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  color: var(--danger);
+  background: var(--danger-weak);
+  border: 1px solid var(--danger);
+  box-shadow: var(--shadow-lg);
+}
+
 .statusBadge {
   display: inline-flex;
   align-items: center;

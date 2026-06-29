@@ -21,7 +21,7 @@ export default function LoginPage() {
           <span className={styles.wordmark}>Halevora Tasks</span>
         </div>
         <h1 className={styles.title}>Sign in</h1>
-        <p className={styles.subtitle}>Use your Halevora account to continue.</p>
+        <p className={styles.subtitle}>Sign in with your Halevora account.</p>
         <LoginForm />
       </div>
     </main>

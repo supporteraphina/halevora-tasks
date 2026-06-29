@@ -378,7 +378,7 @@ function RuleList({
           <h2 className={styles.emptyTitle}>No automations yet</h2>
           <p className={styles.emptyText}>
             Save yourself the busywork. A rule can move a task, set its priority, add a tag,
-            or post a comment the moment something changes — no clicking required.
+            or post a comment the moment something changes. No clicking required.
           </p>
           <button type="button" className={styles.primaryBtn} onClick={onCreate}>
             <PlusIcon /> Create your first rule
@@ -865,7 +865,7 @@ function ConditionStep({
         ) : null}
 
         {draft.conditions.length === 0 ? (
-          <p className={styles.stepEmpty}>No conditions — the rule runs on every trigger.</p>
+          <p className={styles.stepEmpty}>No conditions. The rule runs on every trigger.</p>
         ) : (
           <ul className={styles.rowList}>
             {draft.conditions.map((c, i) => (

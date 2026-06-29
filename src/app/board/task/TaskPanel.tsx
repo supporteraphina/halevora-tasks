@@ -42,6 +42,7 @@ import {
   RecurrenceSection,
 } from "./TaskPanelExtras";
 import { saveAsTemplateAction } from "@/app/board/templates/actions";
+import { TaskErrorBoundary, useReportActionError } from "./actionError";
 import type { TaskDetail, PickerData } from "./data";
 import type { Status, Priority } from "@prisma/client";
 import styles from "./panel.module.css";
@@ -75,9 +76,10 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** Run a server action with a FormData payload, then refresh the route. */
+/** Run a server action with a FormData payload, surface any error, then refresh the route. */
 function useAction() {
   const router = useRouter();
+  const reportError = useReportActionError();
   const [pending, startTransition] = useTransition();
   const run = (
     action: (s: DetailActionState, fd: FormData) => Promise<DetailActionState>,
@@ -86,7 +88,8 @@ function useAction() {
     const fd = new FormData();
     for (const [k, v] of Object.entries(fields)) fd.set(k, v);
     startTransition(async () => {
-      await action({}, fd);
+      const result = await action({}, fd);
+      if (result?.error) reportError(result.error);
       router.refresh();
     });
   };
@@ -133,6 +136,7 @@ export default function TaskPanel({
   onClose: () => void;
 }) {
   const badge = badgeFor(task, new Date());
+  const panelRef = useRef<HTMLElement>(null);
 
   // Esc closes the whole panel.
   useEffect(() => {
@@ -143,10 +147,43 @@ export default function TaskPanel({
     return () => document.removeEventListener("keydown", onEsc);
   }, [onClose]);
 
+  // Focus management: move focus into the panel on open and restore it to the previously
+  // focused element (the card that opened it) on close — so a keyboard user isn't dropped at
+  // the top of the document.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+    return () => previouslyFocused?.focus?.();
+  }, []);
+
+  // Contain Tab focus within the panel while it's open (a lightweight focus trap).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Tab" || !panelRef.current) return;
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Task detail">
       <div className={styles.backdrop} onClick={onClose} aria-hidden="true" />
-      <aside className={styles.panel}>
+      <aside className={styles.panel} ref={panelRef} tabIndex={-1}>
+        <TaskErrorBoundary className={styles.actionErrorToast}>
         <header className={styles.panelHeader}>
           <span className={styles.breadcrumb}>{task.boardName}</span>
           <div className={styles.headerActions}>
@@ -197,6 +234,7 @@ export default function TaskPanel({
             currentUserId={currentUserId}
           />
         </div>
+        </TaskErrorBoundary>
       </aside>
     </div>
   );

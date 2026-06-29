@@ -22,6 +22,7 @@ import {
   type LinkSearchResult,
 } from "./actions";
 import { CommentEditor } from "./CommentEditor";
+import { useReportActionError } from "./actionError";
 import {
   parseFieldConfig,
   formatFieldValue,
@@ -40,9 +41,10 @@ import type {
 import type { Status } from "@prisma/client";
 import styles from "./panel.module.css";
 
-/** Run a server action with a plain-fields FormData, then refresh. */
+/** Run a server action with a plain-fields FormData, surface any error, then refresh. */
 function useAction() {
   const router = useRouter();
+  const reportError = useReportActionError();
   const [pending, startTransition] = useTransition();
   const run = (
     action: (s: DetailActionState, fd: FormData) => Promise<DetailActionState>,
@@ -53,6 +55,7 @@ function useAction() {
       for (const [k, v] of Object.entries(fields)) fd.set(k, v);
       startTransition(async () => {
         const result = await action({}, fd);
+        if (result?.error) reportError(result.error);
         router.refresh();
         resolve(result);
       });

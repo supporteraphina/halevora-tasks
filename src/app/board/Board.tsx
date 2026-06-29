@@ -8,12 +8,14 @@ import {
   createTaskAction,
   changeStatusAction,
   moveCardAction,
+  createBoardAction,
 } from "./actions";
 import {
   STATUS_GROUPS,
   badgeFor,
   type BadgeKey,
 } from "@/domain/statusGroups";
+import { moveTargets, moveTargetLabel } from "@/domain/moveTargets";
 import type { Status, Priority } from "@prisma/client";
 import type { BoardColumn, BoardCard } from "./data";
 import BulkToolbar, {
@@ -69,6 +71,8 @@ export default function Board({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [drag, setDrag] = useState<DragState | null>(null);
+  // Transient error surfaced when a move/reorder is rejected server-side.
+  const [moveError, setMoveError] = useState<string | null>(null);
   // Index within a column where a drop would land, for the insertion indicator.
   const [dropTarget, setDropTarget] = useState<{
     boardId: string;
@@ -119,10 +123,24 @@ export default function Board({
     fd.set("toBoardId", toBoardId);
     fd.set("index", String(index));
     startTransition(async () => {
-      await moveCardAction({}, fd);
+      const result = await moveCardAction({}, fd);
+      if (result?.error) setMoveError(result.error);
       router.refresh();
     });
   }
+
+  // Auto-clear the move error after a few seconds.
+  useEffect(() => {
+    if (!moveError) return;
+    const t = setTimeout(() => setMoveError(null), 4000);
+    return () => clearTimeout(t);
+  }, [moveError]);
+
+  // Targets for the keyboard "Move to…" menu: top/bottom of each board column.
+  const moveBoards = useMemo(
+    () => columns.map((c) => ({ id: c.id, name: c.name, cardCount: c.cards.length })),
+    [columns],
+  );
 
   function onDrop(boardId: string, index: number) {
     if (!drag) return;
@@ -131,36 +149,49 @@ export default function Board({
     setDropTarget(null);
   }
 
+  function moveCardTo(taskId: string, fromBoardId: string, toBoardId: string, index: number) {
+    runMove(taskId, toBoardId, index);
+    void fromBoardId;
+  }
+
   return (
     <div className={styles.boardScroll} data-pending={pending || undefined}>
-      <div className={styles.columns}>
-        {columns.map((col) => (
-          <Column
-            key={col.id}
-            column={col}
-            isCeo={isCeo}
-            now={now}
-            drag={drag}
-            dropTarget={dropTarget}
-            setDropTarget={setDropTarget}
-            selected={selected}
-            onToggleSelect={toggleSelect}
-            onDragStart={(taskId) =>
-              setDrag({ taskId, fromBoardId: col.id })
-            }
-            onDragEnd={() => {
-              setDrag(null);
-              setDropTarget(null);
-            }}
-            onDrop={onDrop}
-          />
-        ))}
-        {columns.length === 0 ? (
-          <p className={styles.emptyBoard}>
-            No boards in this project yet.
-          </p>
-        ) : null}
-      </div>
+      {columns.length === 0 ? (
+        <EmptyBoard />
+      ) : (
+        <div className={styles.columns}>
+          {columns.map((col) => (
+            <Column
+              key={col.id}
+              column={col}
+              isCeo={isCeo}
+              now={now}
+              drag={drag}
+              dropTarget={dropTarget}
+              setDropTarget={setDropTarget}
+              selected={selected}
+              onToggleSelect={toggleSelect}
+              moveBoards={moveBoards}
+              onMoveTo={moveCardTo}
+              onDragStart={(taskId) =>
+                setDrag({ taskId, fromBoardId: col.id })
+              }
+              onDragEnd={() => {
+                setDrag(null);
+                setDropTarget(null);
+              }}
+              onDrop={onDrop}
+            />
+          ))}
+          <AddBoardColumn />
+        </div>
+      )}
+
+      {moveError ? (
+        <div className={styles.moveToast} role="alert">
+          {moveError}
+        </div>
+      ) : null}
 
       <BulkToolbar
         selectedIds={[...selected]}
@@ -172,6 +203,139 @@ export default function Board({
   );
 }
 
+// ---------------------------------------------------------------------------
+//  Empty state + create-board affordances
+// ---------------------------------------------------------------------------
+
+function EmptyBoard() {
+  return (
+    <div className={styles.emptyBoard}>
+      <div className={styles.emptyArt} aria-hidden="true">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+          <rect x="4" y="7" width="9" height="26" rx="2" stroke="currentColor" strokeWidth="1.6" />
+          <rect x="15.5" y="7" width="9" height="18" rx="2" stroke="currentColor" strokeWidth="1.6" />
+          <rect x="27" y="7" width="9" height="22" rx="2" stroke="currentColor" strokeWidth="1.6" />
+        </svg>
+      </div>
+      <h2 className={styles.emptyTitle}>Start your first board</h2>
+      <p className={styles.emptyNote}>
+        Boards are your columns. Create one for a team, a client, or a workstream, then add tasks.
+      </p>
+      <CreateBoard variant="primary" />
+    </div>
+  );
+}
+
+function AddBoardColumn() {
+  return (
+    <div className={styles.addBoardCol}>
+      <CreateBoard variant="ghost" />
+    </div>
+  );
+}
+
+function CreateBoard({ variant }: { variant: "primary" | "ghost" }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  function submit() {
+    const value = name.trim();
+    if (value.length === 0) {
+      setOpen(false);
+      return;
+    }
+    const fd = new FormData();
+    fd.set("name", value);
+    startTransition(async () => {
+      const result = await createBoardAction({}, fd);
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      setName("");
+      setOpen(false);
+      setError(null);
+      router.refresh();
+    });
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className={variant === "primary" ? styles.emptyCreateBtn : styles.addBoardBtn}
+        onClick={() => setOpen(true)}
+      >
+        <span aria-hidden="true">+</span> {variant === "primary" ? "Create a board" : "Add board"}
+      </button>
+    );
+  }
+
+  return (
+    <div className={styles.boardComposer}>
+      <input
+        ref={inputRef}
+        className={styles.composerInput}
+        value={name}
+        placeholder="Board name"
+        disabled={pending}
+        aria-label="Board name"
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          } else if (e.key === "Escape") {
+            setOpen(false);
+            setName("");
+            setError(null);
+          }
+        }}
+      />
+      {error ? (
+        <p className={styles.composerError} role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className={styles.composerActions}>
+        <button
+          type="button"
+          className={styles.composerSave}
+          disabled={pending}
+          onClick={submit}
+        >
+          {pending ? "Creating…" : "Create"}
+        </button>
+        <button
+          type="button"
+          className={styles.composerCancel}
+          onClick={() => {
+            setOpen(false);
+            setName("");
+            setError(null);
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface MoveBoard {
+  id: string;
+  name: string;
+  cardCount: number;
+}
+
 function Column({
   column,
   isCeo,
@@ -181,6 +345,8 @@ function Column({
   setDropTarget,
   selected,
   onToggleSelect,
+  moveBoards,
+  onMoveTo,
   onDragStart,
   onDragEnd,
   onDrop,
@@ -193,6 +359,8 @@ function Column({
   setDropTarget: (t: { boardId: string; index: number } | null) => void;
   selected: Set<string>;
   onToggleSelect: (id: string) => void;
+  moveBoards: MoveBoard[];
+  onMoveTo: (taskId: string, fromBoardId: string, toBoardId: string, index: number) => void;
   onDragStart: (taskId: string) => void;
   onDragEnd: () => void;
   onDrop: (boardId: string, index: number) => void;
@@ -278,6 +446,9 @@ function Column({
               dragging={drag?.taskId === card.id}
               selected={selected.has(card.id)}
               onToggleSelect={onToggleSelect}
+              moveBoards={moveBoards}
+              fromBoardId={column.id}
+              onMoveTo={onMoveTo}
               onDragStart={() => onDragStart(card.id)}
               onDragEnd={onDragEnd}
             />
@@ -299,6 +470,9 @@ function Card({
   dragging,
   selected,
   onToggleSelect,
+  moveBoards,
+  fromBoardId,
+  onMoveTo,
   onDragStart,
   onDragEnd,
 }: {
@@ -307,6 +481,9 @@ function Card({
   dragging: boolean;
   selected: boolean;
   onToggleSelect: (id: string) => void;
+  moveBoards: MoveBoard[];
+  fromBoardId: string;
+  onMoveTo: (taskId: string, fromBoardId: string, toBoardId: string, index: number) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
@@ -317,7 +494,7 @@ function Card({
   // Open the detail panel. Skip if the click landed on an interactive control
   // (the status badge button / its menu / the select checkbox), so those keep their behavior.
   function openDetail(e: React.MouseEvent) {
-    if ((e.target as HTMLElement).closest("button,a,input,label,[role='listbox']")) return;
+    if ((e.target as HTMLElement).closest("button,a,input,label,[role='listbox'],[role='menu']")) return;
     router.push(`/board/task/${card.id}`);
   }
 
@@ -359,6 +536,12 @@ function Card({
           />
         </label>
         <p className={styles.cardTitle}>{card.title}</p>
+        <MoveMenu
+          card={card}
+          moveBoards={moveBoards}
+          fromBoardId={fromBoardId}
+          onMoveTo={onMoveTo}
+        />
       </div>
 
       <div className={styles.cardMeta}>
@@ -473,6 +656,97 @@ function Card({
         </div>
       ) : null}
     </article>
+  );
+}
+
+/**
+ * Keyboard-accessible alternative to drag-and-drop: a "Move to…" menu that sends the card to
+ * the top or bottom of any board column. Drag-and-drop has no keyboard path, so this menu is
+ * the a11y route for reordering and cross-board moves. Fully operable by keyboard (button +
+ * native focusable menu items + Escape to close).
+ */
+function MoveMenu({
+  card,
+  moveBoards,
+  fromBoardId,
+  onMoveTo,
+}: {
+  card: BoardCard;
+  moveBoards: MoveBoard[];
+  fromBoardId: string;
+  onMoveTo: (taskId: string, fromBoardId: string, toBoardId: string, index: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const targets = useMemo(
+    () => moveTargets(moveBoards, fromBoardId, card.id),
+    [moveBoards, fromBoardId, card.id],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+        btnRef.current?.focus(); // restore focus to the trigger
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+
+  return (
+    <div className={styles.moveWrap} ref={ref}>
+      <button
+        ref={btnRef}
+        type="button"
+        className={styles.moveBtn}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Move "${card.title}" to another board`}
+        title="Move to…"
+        draggable={false}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="8" cy="3" r="1.3" fill="currentColor" />
+          <circle cx="8" cy="8" r="1.3" fill="currentColor" />
+          <circle cx="8" cy="13" r="1.3" fill="currentColor" />
+        </svg>
+      </button>
+      {open ? (
+        <div className={styles.moveMenu} role="menu" aria-label="Move to board">
+          <p className={styles.moveMenuLabel}>Move to</p>
+          {targets.map((t) => (
+            <button
+              key={`${t.boardId}-${t.position}`}
+              type="button"
+              role="menuitem"
+              className={styles.moveOption}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                onMoveTo(card.id, fromBoardId, t.boardId, t.index);
+              }}
+            >
+              {moveTargetLabel(t)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

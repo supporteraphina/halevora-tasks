@@ -126,9 +126,117 @@
   min-width: min-content;
 }
 
+/* ---- Empty board (no columns yet) ---- */
 .emptyBoard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-3);
+  max-width: 26rem;
+  height: 100%;
+  margin-inline: auto;
+  padding: var(--space-7) var(--space-5);
+}
+
+.emptyArt {
+  color: var(--ink-subtle);
+}
+
+.emptyTitle {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+
+.emptyNote {
   color: var(--ink-muted);
-  padding: var(--space-5);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+}
+
+.emptyCreateBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  height: 2.25rem;
+  padding-inline: var(--space-4);
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.emptyCreateBtn:hover {
+  background: var(--primary-strong);
+}
+
+/* ---- Add-board trailing column ---- */
+.addBoardCol {
+  width: 16rem;
+  flex-shrink: 0;
+  padding-top: var(--space-1);
+}
+
+.addBoardBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3);
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--ink-muted);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.addBoardBtn:hover {
+  background: var(--surface);
+  border-color: var(--primary);
+  color: var(--ink);
+}
+
+.boardComposer {
+  width: 16rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.composerError {
+  color: var(--danger);
+  font-size: var(--fs-xs);
+  margin: 0;
+}
+
+/* ---- Move-rejected toast ---- */
+.moveToast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-6);
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  max-width: min(28rem, calc(100vw - var(--space-4)));
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  color: var(--danger);
+  background: var(--danger-weak);
+  border: 1px solid var(--danger);
+  box-shadow: var(--shadow-lg);
 }
 
 /* ---- Column ---- */
@@ -273,6 +381,89 @@
   max-width: none;
   flex: 1;
   min-width: 0;
+}
+
+/* ---- Move-to menu (keyboard a11y alternative to drag-and-drop) ---- */
+.moveWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.moveBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: -2px -2px 0 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-subtle);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+/* Reveal the handle on card hover or whenever it (or its menu) holds focus. */
+.card:hover .moveBtn,
+.moveBtn:focus-visible,
+.moveBtn[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.moveBtn:hover,
+.moveBtn[aria-expanded="true"] {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+/* Touch devices have no hover: keep the move handle visible so it's tappable. */
+@media (hover: none) {
+  .moveBtn {
+    opacity: 1;
+  }
+}
+
+.moveMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: var(--z-dropdown);
+  min-width: 12rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-1);
+}
+
+.moveMenuLabel {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-subtle);
+  padding: var(--space-1) var(--space-2);
+  margin: 0;
+}
+
+.moveOption {
+  display: block;
+  width: 100%;
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+
+.moveOption:hover,
+.moveOption:focus-visible {
+  background: var(--surface-2);
 }
 
 .cardMeta {

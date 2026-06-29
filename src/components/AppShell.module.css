@@ -40,6 +40,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  /* Take the slack and scroll internally so the right cluster (search/bell/user) stays pinned
+     and reachable on narrow screens instead of being pushed off-screen by the tab row. */
+  flex: 1;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -90,5 +94,10 @@
 @media (max-width: 520px) {
   .wordmark {
     display: none;
+  }
+  /* Tighten the nav gaps so the tab row and the tools cluster both fit a phone width. */
+  .nav {
+    gap: var(--space-3);
+    padding-inline: var(--space-3);
   }
 }

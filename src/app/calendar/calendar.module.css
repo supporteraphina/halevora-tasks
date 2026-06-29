@@ -251,6 +251,106 @@
   white-space: nowrap;
 }
 
+/* ---- Event row: the draggable event + a keyboard reschedule control ---- */
+.eventRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.eventRow .event {
+  flex: 1;
+  min-width: 0;
+}
+
+.reschedWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.reschedBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-subtle);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+/* Reveal on hover of the row, or whenever the control is focused/open. */
+.eventRow:hover .reschedBtn,
+.reschedBtn:focus-visible,
+.reschedBtn[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.reschedBtn:hover,
+.reschedBtn[aria-expanded="true"] {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+/* Touch devices have no hover: keep the reschedule control visible so it's tappable. */
+@media (hover: none) {
+  .reschedBtn {
+    opacity: 1;
+  }
+}
+
+.reschedMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: var(--z-dropdown);
+  min-width: 12rem;
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.reschedLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+}
+
+.reschedInput {
+  padding: var(--space-2);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  color-scheme: dark;
+}
+
+/* ---- Reschedule error toast ---- */
+.errorToast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-6);
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  max-width: min(28rem, calc(100vw - var(--space-4)));
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  color: var(--danger);
+  background: var(--danger-weak);
+  border: 1px solid var(--danger);
+  box-shadow: var(--shadow-lg);
+}
+
 .dayEmpty {
   color: var(--ink-muted);
   font-size: var(--fs-sm);

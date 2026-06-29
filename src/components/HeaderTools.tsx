@@ -142,13 +142,17 @@ function InboxPanel({
   const ref = useRef<HTMLDivElement>(null);
   const [, startTransition] = useTransition();
 
-  // Close on outside click / Escape.
+  // Close on outside click / Escape; restore focus to the trigger (the bell) on Escape.
   useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
     function onDoc(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     }
     function onEsc(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        opener?.focus?.();
+      }
     }
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onEsc);
@@ -244,8 +248,11 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
   const [searching, startSearch] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Focus the field on open; restore focus to whatever opened the overlay on close.
   useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
     inputRef.current?.focus();
+    return () => opener?.focus?.();
   }, []);
 
   // Debounced scoped search.
@@ -296,23 +303,36 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
             className={styles.searchInput}
             value={query}
             placeholder="Search tasks…"
+            role="combobox"
+            aria-expanded={searched && results.length > 0}
+            aria-controls="search-results"
+            aria-activedescendant={
+              searched && results.length > 0 ? `search-result-${active}` : undefined
+            }
             aria-label="Search tasks"
+            autoComplete="off"
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKey}
           />
           <kbd className={styles.kbd}>Esc</kbd>
         </div>
-        <div className={styles.searchResults} role="listbox" aria-label="Results">
+        <div
+          id="search-results"
+          className={styles.searchResults}
+          role="listbox"
+          aria-label="Results"
+        >
           {searching ? (
             <p className={styles.searchHint}>Searching…</p>
           ) : !searched ? (
-            <p className={styles.searchHint}>Type at least 2 characters.</p>
+            <p className={styles.searchHint}>Type at least 2 characters to search.</p>
           ) : results.length === 0 ? (
             <p className={styles.searchHint}>No tasks match “{query}”.</p>
           ) : (
             results.map((r, i) => (
               <button
                 key={r.id}
+                id={`search-result-${i}`}
                 type="button"
                 role="option"
                 aria-selected={i === active}
