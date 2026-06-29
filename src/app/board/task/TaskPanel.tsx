@@ -38,6 +38,7 @@ import {
   CustomFieldsSection,
   AttachmentsSection,
   ActivitySection,
+  DependenciesSection,
 } from "./TaskPanelExtras";
 import type { TaskDetail, PickerData } from "./data";
 import type { Status, Priority } from "@prisma/client";
@@ -179,6 +180,8 @@ export default function TaskPanel({
 
           <CustomFieldsSection task={task} picker={picker} isCeo={isCeo} />
 
+          <DependenciesSection task={task} />
+
           <AttachmentsSection task={task} />
 
           <ActivitySection
@@ -230,9 +233,32 @@ function TitleEditor({ task }: { task: TaskDetail }) {
 // --- Status -----------------------------------------------------------------
 
 function StatusControl({ task, badgeKey }: { task: TaskDetail; badgeKey: BadgeKey }) {
-  const { run, pending } = useAction();
+  const router = useRouter();
   const { open, setOpen, ref } = usePopover();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const tone = BADGE_VARS[badgeKey];
+
+  // Clear a transient error after a few seconds.
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  // The server enforces the Done-gate; surface its {error} (e.g. "Blocked by N open tasks").
+  function choose(status: Status) {
+    setOpen(false);
+    setError(null);
+    const fd = new FormData();
+    fd.set("taskId", task.id);
+    fd.set("status", status);
+    startTransition(async () => {
+      const result = await setStatusAction({}, fd);
+      if (result?.error) setError(result.error);
+      router.refresh();
+    });
+  }
 
   return (
     <div className={styles.statusRow}>
@@ -264,10 +290,7 @@ function StatusControl({ task, badgeKey }: { task: TaskDetail; badgeKey: BadgeKe
                     role="option"
                     aria-selected={s === task.status}
                     className={styles.menuOption}
-                    onClick={() => {
-                      setOpen(false);
-                      run(setStatusAction, { taskId: task.id, status: s });
-                    }}
+                    onClick={() => choose(s)}
                   >
                     <span className={styles.badgeDot} data-tone={BADGE_VARS[s]} aria-hidden="true" />
                     {STATUS_TEXT[s]}
@@ -278,6 +301,11 @@ function StatusControl({ task, badgeKey }: { task: TaskDetail; badgeKey: BadgeKe
           </div>
         ) : null}
       </div>
+      {error ? (
+        <p className={styles.statusError} role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

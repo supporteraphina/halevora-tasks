@@ -8,6 +8,7 @@
  */
 import prisma from "@/lib/prisma";
 import { taskWhereForCurrentUser } from "@/lib/scope";
+import { openBlockerCount } from "@/domain/dependencies";
 import type { Status, Priority } from "@prisma/client";
 
 export interface BoardCard {
@@ -21,6 +22,10 @@ export interface BoardCard {
   boardId: string;
   assignees: { id: string; name: string }[];
   subtaskCount: number;
+  // Count of OPEN blockers (incoming dependency edges whose blocker is not closed). Drives
+  // the small "blocked" indicator on the card. Counted over ALL edges, not scoped, so the
+  // indicator is honest even when a member can't see the blocking task.
+  openBlockerCount: number;
 }
 
 export interface BoardColumn {
@@ -100,6 +105,9 @@ export async function loadBoard(): Promise<BoardData> {
           // Subtasks are Tasks too; the card shows only the count (detail panel lists them, §4).
           select: { subtasks: true },
         },
+        // Incoming dependency edges (this card is `blocked`) + the blocker's status, so we
+        // can count OPEN blockers for the "blocked" indicator.
+        blockedBy: { select: { blocker: { select: { status: true } } } },
       },
     });
 
@@ -119,6 +127,9 @@ export async function loadBoard(): Promise<BoardData> {
         boardId: t.boardId,
         assignees: t.assignees,
         subtaskCount: t._count.subtasks,
+        openBlockerCount: openBlockerCount(
+          t.blockedBy.map((b) => ({ status: b.blocker.status })),
+        ),
       })),
     });
   }

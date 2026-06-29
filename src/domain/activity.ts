@@ -23,6 +23,8 @@ export const ACTIVITY_TYPES = [
   "attachment_added",
   "attachment_removed",
   "custom_field_set",
+  "dependency_added",
+  "dependency_removed",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
@@ -97,6 +99,16 @@ export function describeActivity(type: string, data: unknown): string {
       return `removed attachment ${str(d.filename) ?? ""}`.trimEnd();
     case "custom_field_set":
       return `updated ${str(d.field) ?? "a field"}`;
+    case "dependency_added": {
+      const other = str(d.title) ?? "a task";
+      return d.direction === "waiting_on"
+        ? `added a "waiting on" link to ${other}`
+        : `added a "blocking" link to ${other}`;
+    }
+    case "dependency_removed": {
+      const other = str(d.title) ?? "a task";
+      return `removed a dependency link to ${other}`;
+    }
     default:
       return "made a change";
   }

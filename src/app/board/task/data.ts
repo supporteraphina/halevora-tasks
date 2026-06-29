@@ -13,6 +13,7 @@
 import prisma from "@/lib/prisma";
 import { taskWhereForCurrentUser } from "@/lib/scope";
 import { taskScopeWhere } from "@/domain/scope";
+import { openBlockerCount } from "@/domain/dependencies";
 import { currentActor } from "@/lib/scope";
 import { storageEnabled } from "@/lib/storage";
 import type { Status, Priority, CustomFieldType } from "@prisma/client";
@@ -84,6 +85,14 @@ export interface DetailActivity {
   createdAt: Date;
 }
 
+/** One linked task as seen from the current task, in a given dependency direction. */
+export interface DetailDependency {
+  taskId: string;
+  title: string;
+  status: Status;
+  boardName: string;
+}
+
 export interface TaskDetail {
   id: string;
   boardId: string;
@@ -104,6 +113,12 @@ export interface TaskDetail {
   attachmentsEnabled: boolean;
   comments: DetailComment[];
   activity: DetailActivity[];
+  // "Waiting on": tasks that block THIS task (incoming edges; this task is `blocked`).
+  waitingOn: DetailDependency[];
+  // "Blocking": tasks THIS task blocks (outgoing edges; this task is `blocker`).
+  blocking: DetailDependency[];
+  // Count of `waitingOn` blockers that are still open — drives the Done-gate hint.
+  openBlockerCount: number;
 }
 
 /** Everyone in the workspace — for the assignee + tag pickers. Names are not task content. */
@@ -188,6 +203,32 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetail | null>
           actor: { select: { name: true } },
         },
       },
+      // Incoming edges (this task is `blocked`) = tasks this task is WAITING ON.
+      blockedBy: {
+        select: {
+          blocker: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              board: { select: { name: true } },
+            },
+          },
+        },
+      },
+      // Outgoing edges (this task is `blocker`) = tasks this task is BLOCKING.
+      blocking: {
+        select: {
+          blocked: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              board: { select: { name: true } },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -218,6 +259,49 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetail | null>
     orderBy: { order: "asc" },
     select: { id: true, title: true, status: true, dueAt: true },
   });
+
+  // The Done-gate counts ALL open blockers (security-critical): a member must not bypass
+  // the gate by being unable to see a blocking task. This count is over the full edge set.
+  const openCount = openBlockerCount(
+    task.blockedBy.map((e) => ({ status: e.blocker.status })),
+  );
+
+  // The displayed lists, by contrast, are SCOPED: only show titles of linked tasks the actor
+  // may see (never leak a hidden task's title). Resolve the visible subset of linked ids.
+  const linkedIds = [
+    ...task.blockedBy.map((e) => e.blocker.id),
+    ...task.blocking.map((e) => e.blocked.id),
+  ];
+  const visibleLinked =
+    linkedIds.length === 0
+      ? new Set<string>()
+      : new Set(
+          (
+            await prisma.task.findMany({
+              where: {
+                AND: [taskScopeWhere(actor), { id: { in: linkedIds } }],
+              },
+              select: { id: true },
+            })
+          ).map((t) => t.id),
+        );
+
+  const waitingOn: DetailDependency[] = task.blockedBy
+    .filter((e) => visibleLinked.has(e.blocker.id))
+    .map((e) => ({
+      taskId: e.blocker.id,
+      title: e.blocker.title,
+      status: e.blocker.status,
+      boardName: e.blocker.board.name,
+    }));
+  const blockingList: DetailDependency[] = task.blocking
+    .filter((e) => visibleLinked.has(e.blocked.id))
+    .map((e) => ({
+      taskId: e.blocked.id,
+      title: e.blocked.title,
+      status: e.blocked.status,
+      boardName: e.blocked.board.name,
+    }));
 
   return {
     id: task.id,
@@ -270,6 +354,9 @@ export async function loadTaskDetail(taskId: string): Promise<TaskDetail | null>
       actorName: a.actor?.name ?? null,
       createdAt: a.createdAt,
     })),
+    waitingOn,
+    blocking: blockingList,
+    openBlockerCount: openCount,
   };
 }
 

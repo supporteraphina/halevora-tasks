@@ -16,6 +16,12 @@ import {
 } from "@/domain/dates";
 import { parseTimeEstimate, normalizeTagName } from "@/domain/taskDetail";
 import { isCustomFieldKind, parseFieldValue } from "@/domain/customFields";
+import {
+  validateNewDependency,
+  openBlockerCount,
+  type DepEdge,
+} from "@/domain/dependencies";
+import { isClosed } from "@/domain/status";
 import { recordActivity } from "@/lib/activity";
 
 const BOARD_PATH = "/board";
@@ -62,6 +68,29 @@ function revalidateTask(taskId: string) {
   revalidatePath(`/board/task/${taskId}`);
 }
 
+/**
+ * The Done-gate (handoff 06 §6.3), server-enforced. A task may not be set to DONE or
+ * REVIEWED ("more done than Done") while it has any OPEN blocker — a `TaskDependency`
+ * whose `blocker` is not closed. Reads the blockers fresh (never trust the client) and
+ * returns the count of open ones; the caller refuses the transition when it is > 0.
+ *
+ * This is shared by BOTH status-change paths: the detail panel (`setStatusAction` here)
+ * and the board dropdown (`changeStatusAction` in src/app/board/actions.ts re-implements
+ * the same check against the same domain helper).
+ */
+async function countOpenBlockers(taskId: string): Promise<number> {
+  const blockers = await prisma.taskDependency.findMany({
+    where: { blockedId: taskId },
+    select: { blocker: { select: { status: true } } },
+  });
+  return openBlockerCount(blockers.map((b) => ({ status: b.blocker.status })));
+}
+
+/** True for the closed statuses we gate on (DONE and the stronger REVIEWED). */
+function isGatedClosedStatus(status: Status): boolean {
+  return isClosed(status);
+}
+
 // --- Status -----------------------------------------------------------------
 
 /** Change a task's status. Writes only the four STORED statuses (never OVERDUE). */
@@ -76,6 +105,14 @@ export async function setStatusAction(
 
   const { actor, task } = await findVisibleTask(taskId);
   if (!task) return { error: "Task not found." };
+
+  // Done-gate: refuse closing (DONE / REVIEWED) while any blocker is still open.
+  if (isGatedClosedStatus(status) && !isClosed(task.status)) {
+    const open = await countOpenBlockers(task.id);
+    if (open > 0) {
+      return { error: `Blocked by ${open} open task${open === 1 ? "" : "s"}.` };
+    }
+  }
 
   if (task.status !== status) {
     await prisma.task.update({ where: { id: task.id }, data: { status } });
@@ -898,4 +935,187 @@ export async function deleteAttachmentAction(
   });
   revalidateTask(task.id);
   return { ok: true };
+}
+
+// --- Dependencies -----------------------------------------------------------
+
+/**
+ * Add a dependency link from the current task. `direction` chooses which endpoint the
+ * current task is:
+ *   - "blocking"    => current task BLOCKS the other (edge blocker=current, blocked=other)
+ *   - "waiting_on"  => current task WAITS ON the other (edge blocker=other, blocked=current)
+ *
+ * BOTH endpoints are re-authorized via `findVisibleTask` — a member must be able to see
+ * both tasks to link them; a client id is never trusted. The cycle check runs SERVER-SIDE
+ * over the trusted, stored edge set BEFORE insert (a client could post any pair).
+ */
+export async function addDependencyAction(
+  _prev: DetailActionState,
+  formData: FormData,
+): Promise<DetailActionState> {
+  const taskId = String(formData.get("taskId") ?? "");
+  const otherId = String(formData.get("otherId") ?? "");
+  const direction = String(formData.get("direction") ?? "");
+  if (!taskId) return { error: "Missing task." };
+  if (!otherId) return { error: "Pick a task to link." };
+  if (direction !== "blocking" && direction !== "waiting_on") {
+    return { error: "Bad link direction." };
+  }
+  if (taskId === otherId) return { error: "A task cannot depend on itself." };
+
+  // Re-authorize BOTH endpoints independently against the actor's scope.
+  const { actor, task } = await findVisibleTask(taskId);
+  if (!task) return { error: "Task not found." };
+  const { task: other } = await findVisibleTask(otherId);
+  if (!other) return { error: "That task is not available." };
+
+  const blockerId = direction === "blocking" ? task.id : other.id;
+  const blockedId = direction === "blocking" ? other.id : task.id;
+
+  // Rebuild the trusted graph from the DB, then run the pure cycle/duplicate/self gate.
+  const existing = await prisma.taskDependency.findMany({
+    select: { blockerId: true, blockedId: true },
+  });
+  const edges: DepEdge[] = existing.map((e) => ({
+    blockerId: e.blockerId,
+    blockedId: e.blockedId,
+  }));
+  const check = validateNewDependency(edges, { blockerId, blockedId });
+  if (!check.ok) return { error: check.error };
+
+  await prisma.taskDependency.create({ data: { blockerId, blockedId } });
+
+  // The other task's title for the activity phrase (already proven visible above).
+  const otherTitle = await prisma.task.findUnique({
+    where: { id: other.id },
+    select: { title: true },
+  });
+  await recordActivity({
+    taskId: task.id,
+    boardId: task.boardId,
+    actorId: actor.userId,
+    type: "dependency_added",
+    data: { direction, title: otherTitle?.title ?? null },
+  });
+  revalidateTask(task.id);
+  revalidateTask(other.id);
+  return { ok: true };
+}
+
+/**
+ * Remove a dependency link. The edge is identified by both endpoints; BOTH the current task
+ * and the other endpoint are re-authorized via `findVisibleTask`, and the edge must connect
+ * exactly those two tasks (in either role) — never trust a raw dependency id from the client.
+ */
+export async function removeDependencyAction(
+  _prev: DetailActionState,
+  formData: FormData,
+): Promise<DetailActionState> {
+  const taskId = String(formData.get("taskId") ?? "");
+  const otherId = String(formData.get("otherId") ?? "");
+  const direction = String(formData.get("direction") ?? "");
+  if (!taskId) return { error: "Missing task." };
+  if (!otherId) return { error: "Missing linked task." };
+  if (direction !== "blocking" && direction !== "waiting_on") {
+    return { error: "Bad link direction." };
+  }
+
+  const { actor, task } = await findVisibleTask(taskId);
+  if (!task) return { error: "Task not found." };
+  const { task: other } = await findVisibleTask(otherId);
+  if (!other) return { error: "That task is not available." };
+
+  const blockerId = direction === "blocking" ? task.id : other.id;
+  const blockedId = direction === "blocking" ? other.id : task.id;
+
+  // Delete by the exact endpoint pair (the @@unique key) — scoped to visible tasks above.
+  const edge = await prisma.taskDependency.findUnique({
+    where: { blockerId_blockedId: { blockerId, blockedId } },
+    select: { id: true },
+  });
+  if (!edge) return { error: "Link not found." };
+
+  await prisma.taskDependency.delete({ where: { id: edge.id } });
+
+  const otherTitle = await prisma.task.findUnique({
+    where: { id: other.id },
+    select: { title: true },
+  });
+  await recordActivity({
+    taskId: task.id,
+    boardId: task.boardId,
+    actorId: actor.userId,
+    type: "dependency_removed",
+    data: { direction, title: otherTitle?.title ?? null },
+  });
+  revalidateTask(task.id);
+  revalidateTask(other.id);
+  return { ok: true };
+}
+
+export interface LinkSearchResult {
+  id: string;
+  title: string;
+  status: Status;
+  boardName: string;
+}
+
+/**
+ * SCOPED search over tasks the current actor may see, for the dependency link picker.
+ * Composes `taskScopeWhere(actor)` so a MEMBER only ever finds tasks assigned to them
+ * (CEO finds all). Excludes the current task (no self-link), subtasks, archived, and the
+ * already-linked tasks (in either direction). Never returns task content the actor can't see.
+ */
+export async function searchLinkableTasksAction(
+  taskId: string,
+  query: string,
+): Promise<{ results?: LinkSearchResult[]; error?: string }> {
+  if (!taskId) return { error: "Missing task." };
+
+  // Re-authorize the current task; only its own viewer may search to link from it.
+  const { actor, task } = await findVisibleTask(taskId);
+  if (!task) return { error: "Task not found." };
+
+  // Tasks already linked in either direction — excluded from the picker.
+  const linked = await prisma.taskDependency.findMany({
+    where: { OR: [{ blockerId: task.id }, { blockedId: task.id }] },
+    select: { blockerId: true, blockedId: true },
+  });
+  const exclude = new Set<string>([task.id]);
+  for (const e of linked) {
+    exclude.add(e.blockerId);
+    exclude.add(e.blockedId);
+  }
+
+  const q = query.trim();
+  const results = await prisma.task.findMany({
+    where: {
+      AND: [
+        taskScopeWhere(actor),
+        {
+          parentId: null,
+          archivedAt: null,
+          id: { notIn: [...exclude] },
+          ...(q ? { title: { contains: q, mode: "insensitive" as const } } : {}),
+        },
+      ],
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 12,
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      board: { select: { name: true } },
+    },
+  });
+
+  return {
+    results: results.map((r) => ({
+      id: r.id,
+      title: r.title,
+      status: r.status,
+      boardName: r.board.name,
+    })),
+  };
 }

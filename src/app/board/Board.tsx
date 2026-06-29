@@ -255,6 +255,24 @@ function Card({
       <div className={styles.cardMeta}>
         <StatusBadge taskId={card.id} badgeKey={badge.key} label={badge.label} />
 
+        {card.openBlockerCount > 0 ? (
+          <span
+            className={styles.blocked}
+            title={`Blocked by ${card.openBlockerCount} open task${
+              card.openBlockerCount === 1 ? "" : "s"
+            }`}
+            aria-label={`Blocked by ${card.openBlockerCount} open task${
+              card.openBlockerCount === 1 ? "" : "s"
+            }`}
+          >
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M3.4 3.4l7.2 7.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+            Blocked
+          </span>
+        ) : null}
+
         {card.priority !== "NORMAL" ? (
           <span
             className={styles.prio}
@@ -361,6 +379,7 @@ function StatusBadge({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const tone = BADGE_VARS[badgeKey];
 
@@ -380,13 +399,23 @@ function StatusBadge({
     };
   }, [open]);
 
+  // Clear a transient error message after a few seconds.
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 4000);
+    return () => clearTimeout(t);
+  }, [error]);
+
   function choose(status: Status) {
     setOpen(false);
+    setError(null);
     const fd = new FormData();
     fd.set("taskId", taskId);
     fd.set("status", status);
     startTransition(async () => {
-      await changeStatusAction({}, fd);
+      // The server enforces the Done-gate; surface its message if it refuses.
+      const result = await changeStatusAction({}, fd);
+      if (result?.error) setError(result.error);
       router.refresh();
     });
   }
@@ -437,6 +466,12 @@ function StatusBadge({
             </div>
           ))}
         </div>
+      ) : null}
+
+      {error ? (
+        <span className={styles.blockedToast} role="alert">
+          {error}
+        </span>
       ) : null}
     </div>
   );

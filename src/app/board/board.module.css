@@ -400,6 +400,34 @@
   font-weight: var(--fw-medium);
 }
 
+/* ---- Blocked indicator (open dependency) ---- */
+.blocked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--status-overdue);
+  background: var(--status-overdue-weak);
+  white-space: nowrap;
+}
+
+.blockedToast {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 30;
+  max-width: 220px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  color: var(--danger);
+  background: var(--danger-weak);
+  box-shadow: var(--shadow-md);
+}
+
 /* ---- Subtask count ---- */
 .subtasks {
   display: inline-flex;

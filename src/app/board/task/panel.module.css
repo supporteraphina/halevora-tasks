@@ -126,6 +126,15 @@
 /* ---- Status row ---- */
 .statusRow {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.statusError {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--danger);
 }
 
 .statusBadge {
@@ -1135,6 +1144,134 @@
 .activityText strong {
   color: var(--ink);
   font-weight: var(--fw-medium);
+}
+
+/* ---- Dependencies ---- */
+.depGateHint {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--status-overdue-weak);
+  color: var(--status-overdue);
+  font-size: var(--fs-sm);
+}
+
+.depBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.depHeading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--ink);
+}
+
+.depList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.depItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.depDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.depDot[data-tone="todo"] {
+  background: var(--status-todo);
+}
+.depDot[data-tone="progress"] {
+  background: var(--status-progress);
+}
+.depDot[data-tone="done"] {
+  background: var(--status-done);
+}
+.depDot[data-tone="reviewed"] {
+  background: var(--status-reviewed);
+}
+
+.depTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-base);
+  color: var(--ink);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.depTitle:hover {
+  text-decoration: underline;
+}
+
+.depStatus {
+  font-size: var(--fs-xs);
+  color: var(--ink-subtle);
+  white-space: nowrap;
+}
+
+.depPicker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
+}
+
+.depResults {
+  display: flex;
+  flex-direction: column;
+  max-height: 12rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.depResult {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  text-align: left;
+}
+.depResult:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.depResult:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+
+.depResultText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.depResultBoard {
+  font-size: var(--fs-xs);
+  color: var(--ink-subtle);
+  white-space: nowrap;
 }
 
 /* ---- Mobile ---- */

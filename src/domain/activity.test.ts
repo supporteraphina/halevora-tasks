@@ -18,6 +18,8 @@ describe("ACTIVITY_TYPES", () => {
       "attachment_added",
       "attachment_removed",
       "custom_field_set",
+      "dependency_added",
+      "dependency_removed",
     ];
     for (const t of expected) expect(ACTIVITY_TYPES).toContain(t);
   });
@@ -68,6 +70,24 @@ describe("describeActivity", () => {
     expect(
       describeActivity("custom_field_set", { field: "Budget" }),
     ).toBe("updated Budget");
+  });
+
+  it("renders dependency add/remove with direction and the other task's title", () => {
+    expect(
+      describeActivity("dependency_added", {
+        direction: "waiting_on",
+        title: "Design",
+      }),
+    ).toBe('added a "waiting on" link to Design');
+    expect(
+      describeActivity("dependency_added", {
+        direction: "blocking",
+        title: "Ship",
+      }),
+    ).toBe('added a "blocking" link to Ship');
+    expect(
+      describeActivity("dependency_removed", { title: "Design" }),
+    ).toBe("removed a dependency link to Design");
   });
 
   it("falls back to a readable label for an unknown payload", () => {

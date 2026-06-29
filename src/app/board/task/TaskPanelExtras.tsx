@@ -13,7 +13,11 @@ import {
   uploadAttachmentAction,
   deleteAttachmentAction,
   getAttachmentUrlAction,
+  addDependencyAction,
+  removeDependencyAction,
+  searchLinkableTasksAction,
   type DetailActionState,
+  type LinkSearchResult,
 } from "./actions";
 import { CommentEditor } from "./CommentEditor";
 import {
@@ -29,7 +33,9 @@ import type {
   DetailCustomField,
   DetailComment,
   DetailActivity,
+  DetailDependency,
 } from "./data";
+import type { Status } from "@prisma/client";
 import styles from "./panel.module.css";
 
 /** Run a server action with a plain-fields FormData, then refresh. */
@@ -686,6 +692,220 @@ function formatBytes(bytes: number | null): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// =====================================================================
+//  Dependencies (blocking / waiting-on links)
+// =====================================================================
+
+const DEP_TONE: Record<Status, string> = {
+  TODO: "todo",
+  IN_PROGRESS: "progress",
+  DONE: "done",
+  REVIEWED: "reviewed",
+};
+const DEP_STATUS_TEXT: Record<Status, string> = {
+  TODO: "To Do",
+  IN_PROGRESS: "In Progress",
+  DONE: "Done",
+  REVIEWED: "Reviewed",
+};
+
+export function DependenciesSection({ task }: { task: TaskDetail }) {
+  return (
+    <section className={styles.listSection}>
+      <h3 className={styles.sectionTitle}>Dependencies</h3>
+
+      {task.openBlockerCount > 0 ? (
+        <p className={styles.depGateHint} role="status">
+          This task is blocked by {task.openBlockerCount} open task
+          {task.openBlockerCount === 1 ? "" : "s"}. It cannot be marked Done until they close.
+        </p>
+      ) : null}
+
+      <DependencyList
+        task={task}
+        direction="waiting_on"
+        label="Waiting on"
+        hint="Tasks that must close before this one can be Done."
+        items={task.waitingOn}
+        addLabel="+ Add blocker"
+      />
+      <DependencyList
+        task={task}
+        direction="blocking"
+        label="Blocking"
+        hint="Tasks that cannot be Done until this one closes."
+        items={task.blocking}
+        addLabel="+ Add blocked task"
+      />
+    </section>
+  );
+}
+
+function DependencyList({
+  task,
+  direction,
+  label,
+  hint,
+  items,
+  addLabel,
+}: {
+  task: TaskDetail;
+  direction: "waiting_on" | "blocking";
+  label: string;
+  hint: string;
+  items: DetailDependency[];
+  addLabel: string;
+}) {
+  const { run, pending } = useAction();
+  const [adding, setAdding] = useState(false);
+
+  return (
+    <div className={styles.depBlock}>
+      <div className={styles.sectionHeader}>
+        <span className={styles.depHeading}>
+          {label}
+          {items.length > 0 ? (
+            <span className={styles.countPill}>{items.length}</span>
+          ) : null}
+        </span>
+        <button
+          type="button"
+          className={styles.addLink}
+          onClick={() => setAdding((v) => !v)}
+        >
+          {adding ? "Close" : addLabel}
+        </button>
+      </div>
+
+      {adding ? (
+        <DependencyPicker
+          task={task}
+          direction={direction}
+          onDone={() => setAdding(false)}
+        />
+      ) : null}
+
+      {items.length === 0 && !adding ? (
+        <p className={styles.emptyHint}>{hint}</p>
+      ) : (
+        <ul className={styles.depList}>
+          {items.map((d) => (
+            <li key={d.taskId} className={styles.depItem}>
+              <span
+                className={styles.depDot}
+                data-tone={DEP_TONE[d.status]}
+                aria-hidden="true"
+              />
+              <a className={styles.depTitle} href={`/board/task/${d.taskId}`}>
+                {d.title}
+              </a>
+              <span className={styles.depStatus}>{DEP_STATUS_TEXT[d.status]}</span>
+              <button
+                type="button"
+                className={styles.iconBtn}
+                disabled={pending}
+                aria-label={`Remove link to ${d.title}`}
+                onClick={() =>
+                  run(removeDependencyAction, {
+                    taskId: task.id,
+                    otherId: d.taskId,
+                    direction,
+                  })
+                }
+              >
+                <Trash />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function DependencyPicker({
+  task,
+  direction,
+  onDone,
+}: {
+  task: TaskDetail;
+  direction: "waiting_on" | "blocking";
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const { run, pending } = useAction();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<LinkSearchResult[]>([]);
+  const [searching, startSearch] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // Debounced SCOPED search — only returns tasks the actor may see.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      startSearch(async () => {
+        const res = await searchLinkableTasksAction(task.id, query);
+        if (res.error) setError(res.error);
+        else setResults(res.results ?? []);
+      });
+    }, 200);
+    return () => clearTimeout(handle);
+  }, [query, task.id]);
+
+  async function pick(otherId: string) {
+    setError(null);
+    const result = await run(addDependencyAction, {
+      taskId: task.id,
+      otherId,
+      direction,
+    });
+    if (result.error) setError(result.error);
+    else {
+      onDone();
+      router.refresh();
+    }
+  }
+
+  return (
+    <div className={styles.depPicker}>
+      <input
+        className={styles.inlineInput}
+        placeholder="Search tasks to link…"
+        value={query}
+        autoFocus
+        disabled={pending}
+        aria-label="Search tasks to link"
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      {error ? <p className={styles.fieldError}>{error}</p> : null}
+      <div className={styles.depResults}>
+        {searching ? (
+          <p className={styles.emptyHint}>Searching…</p>
+        ) : results.length === 0 ? (
+          <p className={styles.emptyHint}>No matching tasks you can link.</p>
+        ) : (
+          results.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              className={styles.depResult}
+              disabled={pending}
+              onClick={() => pick(r.id)}
+            >
+              <span
+                className={styles.depDot}
+                data-tone={DEP_TONE[r.status]}
+                aria-hidden="true"
+              />
+              <span className={styles.depResultText}>{r.title}</span>
+              <span className={styles.depResultBoard}>{r.boardName}</span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
 }
 
 // =====================================================================

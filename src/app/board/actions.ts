@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { requireActor } from "@/lib/scope";
 import { taskScopeWhere } from "@/domain/scope";
-import { STATUSES, type Status } from "@/domain/status";
+import { STATUSES, isClosed, type Status } from "@/domain/status";
+import { openBlockerCount } from "@/domain/dependencies";
 import {
   appendOrder,
   orderForMove,
@@ -98,6 +99,20 @@ export async function changeStatusAction(
 
   const { task } = await findVisibleTask(taskId);
   if (!task) return { error: "Task not found." };
+
+  // Done-gate (handoff 06 §6.3), server-enforced on the board path too: refuse closing
+  // (DONE / REVIEWED) while any blocker is still open. Reads blockers fresh from the DB and
+  // judges with the same pure `openBlockerCount`; never trusts the client.
+  if (isClosed(status) && !isClosed(task.status)) {
+    const blockers = await prisma.taskDependency.findMany({
+      where: { blockedId: task.id },
+      select: { blocker: { select: { status: true } } },
+    });
+    const open = openBlockerCount(blockers.map((b) => ({ status: b.blocker.status })));
+    if (open > 0) {
+      return { error: `Blocked by ${open} open task${open === 1 ? "" : "s"}.` };
+    }
+  }
 
   await prisma.task.update({ where: { id: task.id }, data: { status } });
   revalidatePath(BOARD_PATH);
