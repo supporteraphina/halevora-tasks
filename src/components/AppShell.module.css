@@ -10,8 +10,9 @@
   align-items: center;
   gap: var(--space-5);
   padding-inline: var(--space-4);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   background: var(--bg);
+  box-shadow: var(--shadow-sm);
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
@@ -89,6 +90,15 @@
   flex: 1;
   min-height: 0;
   background: var(--bg-sunken);
+}
+
+/* Routed content wrapper — keyed by pathname so each navigation replays a calm entrance. */
+.view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  animation: hv-fade-in var(--dur-base) var(--ease-out) both;
 }
 
 @media (max-width: 520px) {

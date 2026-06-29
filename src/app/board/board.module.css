@@ -247,9 +247,18 @@
   flex-direction: column;
   max-height: 100%;
   background: var(--bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card), var(--hairline-top);
+  /* Columns reveal in a gentle left-to-right stagger on board mount. */
+  animation: hv-rise var(--dur-slow) var(--ease-out) both;
 }
+.columns > .column:nth-child(1) { animation-delay: 0ms; }
+.columns > .column:nth-child(2) { animation-delay: 50ms; }
+.columns > .column:nth-child(3) { animation-delay: 100ms; }
+.columns > .column:nth-child(4) { animation-delay: 150ms; }
+.columns > .column:nth-child(5) { animation-delay: 200ms; }
+.columns > .column:nth-child(n + 6) { animation-delay: 240ms; }
 
 .colHeader {
   display: flex;
@@ -326,30 +335,50 @@
 /* ---- Card ---- */
 .card {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   padding: var(--space-3);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   cursor: grab;
+  box-shadow: var(--shadow-card);
   transition: border-color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  animation: hv-rise-sm var(--dur-base) var(--ease-out) both;
 }
+
+/* Gentle per-card stagger within each column. */
+.cardList > .card:nth-child(1) { animation-delay: 60ms; }
+.cardList > .card:nth-child(2) { animation-delay: 100ms; }
+.cardList > .card:nth-child(3) { animation-delay: 140ms; }
+.cardList > .card:nth-child(4) { animation-delay: 180ms; }
+.cardList > .card:nth-child(n + 5) { animation-delay: 210ms; }
 
 .card:hover {
   border-color: var(--border-strong);
   background: var(--surface-2);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.card:active {
+  transform: translateY(0);
 }
 
 .card[data-dragging] {
   opacity: 0.5;
   cursor: grabbing;
+  transform: none;
+  box-shadow: var(--shadow-lg);
 }
 
 .card[data-selected] {
   border-color: var(--primary);
   background: var(--primary-weak);
+  box-shadow: 0 0 0 1px var(--primary), var(--shadow-card);
 }
 
 /* Title row with a leading select checkbox. */
@@ -433,11 +462,13 @@
   min-width: 12rem;
   max-height: 18rem;
   overflow-y: auto;
-  background: var(--surface);
+  background: var(--surface-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-pop);
   padding: var(--space-1);
+  transform-origin: top right;
+  animation: hv-pop var(--dur-base) var(--ease-spring) both;
 }
 
 .moveMenuLabel {
@@ -551,14 +582,16 @@
   left: 0;
   z-index: var(--z-dropdown);
   min-width: 11rem;
-  background: var(--surface);
+  background: var(--surface-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-pop);
   padding: var(--space-2);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  transform-origin: top left;
+  animation: hv-pop var(--dur-base) var(--ease-spring) both;
 }
 
 .statusGroup {

@@ -81,7 +81,11 @@ export default function AppShell({
           {user ? <UserMenu name={user.name} role={user.role} /> : null}
         </div>
       </header>
-      <main className={styles.main}>{children}</main>
+      <main className={styles.main}>
+        <div key={pathname} className={styles.view}>
+          {children}
+        </div>
+      </main>
     </div>
   );
 }
